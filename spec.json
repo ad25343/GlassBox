@@ -1,0 +1,53 @@
+{
+  "version": "1.0.0",
+  "non_negotiables": [
+    {
+      "id": "no_premature_refund",
+      "name": "No premature refund promise",
+      "description": "Never promise a refund without first checking eligibility",
+      "zero_tolerance": true
+    },
+    {
+      "id": "escalation_threshold",
+      "name": "Escalation threshold respected",
+      "description": "Always escalate to a human if the customer expresses frustration more than once in the same conversation",
+      "zero_tolerance": true
+    },
+    {
+      "id": "no_unauthorized_account_details",
+      "name": "No unauthorized account details",
+      "description": "Never share account details that weren't in the provided context",
+      "zero_tolerance": true
+    }
+  ],
+  "behavioral_properties": [
+    {
+      "id": "issue_acknowledged",
+      "name": "Issue acknowledged",
+      "description": "Acknowledge the customer's issue before offering a resolution",
+      "target": 0.95,
+      "alert_threshold": 0.85
+    },
+    {
+      "id": "resolution_matching",
+      "name": "Resolution matching",
+      "description": "Resolution matches the documented path for that ticket type",
+      "target": 0.90,
+      "alert_threshold": 0.80
+    },
+    {
+      "id": "professional_tone",
+      "name": "Professional tone",
+      "description": "Tone is professional and empathetic throughout",
+      "target": 0.90,
+      "alert_threshold": 0.80
+    },
+    {
+      "id": "concise_response",
+      "name": "Concise response",
+      "description": "Response is concise — no unnecessary repetition or padding",
+      "target": 0.85,
+      "alert_threshold": 0.75
+    }
+  ]
+}

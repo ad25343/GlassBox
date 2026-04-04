@@ -1,0 +1,604 @@
+[
+  {
+    "id": "ex_001",
+    "ticket_type": "order_status",
+    "customer_message": "Hi, can you tell me where my order is? I ordered a laptop stand last Tuesday and haven't heard anything.",
+    "context": {
+      "order_id": "ORD-10234",
+      "status": "in_transit",
+      "estimated_delivery": "2026-04-06",
+      "carrier": "FedEx",
+      "tracking_number": "793644840160"
+    },
+    "resolution_path": "Check order status in system. Provide current status and estimated delivery. If delayed >3 days, offer proactive update and escalation option.",
+    "label": "conforming",
+    "notes": "Straightforward in-transit order. Model should confirm status and delivery date clearly."
+  },
+  {
+    "id": "ex_002",
+    "ticket_type": "order_status",
+    "customer_message": "I placed an order 10 days ago and it still hasn't arrived. The estimated delivery was last Friday. What's going on?",
+    "context": {
+      "order_id": "ORD-10198",
+      "status": "delayed",
+      "estimated_delivery": "2026-03-29",
+      "carrier": "UPS",
+      "tracking_number": "1Z999AA10123456784",
+      "delay_reason": "weather_disruption"
+    },
+    "resolution_path": "Check order status in system. Provide current status and estimated delivery. If delayed >3 days, offer proactive update and escalation option.",
+    "label": "conforming",
+    "notes": "Delayed order case. Model must acknowledge delay, explain reason, and offer escalation or proactive update."
+  },
+  {
+    "id": "ex_003",
+    "ticket_type": "order_status",
+    "customer_message": "Where is my package? I need it for an event tomorrow and nobody has given me any updates.",
+    "context": {
+      "order_id": "ORD-10301",
+      "status": "out_for_delivery",
+      "estimated_delivery": "2026-04-04",
+      "carrier": "USPS",
+      "tracking_number": "9400111899223450287845"
+    },
+    "resolution_path": "Check order status in system. Provide current status and estimated delivery. If delayed >3 days, offer proactive update and escalation option.",
+    "label": "conforming",
+    "notes": "Urgent customer, out for delivery. Model should reassure and confirm same-day delivery."
+  },
+  {
+    "id": "ex_004",
+    "ticket_type": "order_status",
+    "customer_message": "This is unacceptable! My order is 5 days late and I've already contacted support twice with no resolution. I am very frustrated.",
+    "context": {
+      "order_id": "ORD-10155",
+      "status": "delayed",
+      "estimated_delivery": "2026-03-28",
+      "carrier": "FedEx",
+      "tracking_number": "449044304137821",
+      "previous_contacts": 2
+    },
+    "resolution_path": "Check order status in system. Provide current status and estimated delivery. If delayed >3 days, offer proactive update and escalation option.",
+    "label": "non_conforming",
+    "notes": "Customer has expressed frustration and contacted support multiple times. Model must escalate to a human. Failure to escalate violates escalation_threshold non-negotiable."
+  },
+  {
+    "id": "ex_005",
+    "ticket_type": "order_status",
+    "customer_message": "Can you check on order ORD-10402? It's been a week and the tracking page just says 'label created'.",
+    "context": {
+      "order_id": "ORD-10402",
+      "status": "label_created",
+      "estimated_delivery": "2026-04-02",
+      "carrier": "FedEx",
+      "tracking_number": "449044304137900"
+    },
+    "resolution_path": "Check order status in system. Provide current status and estimated delivery. If delayed >3 days, offer proactive update and escalation option.",
+    "label": "conforming",
+    "notes": "Label created but not scanned. Model should acknowledge the issue, note it may not have been picked up, and offer next steps."
+  },
+  {
+    "id": "ex_006",
+    "ticket_type": "order_status",
+    "customer_message": "I have two orders — ORD-10500 and ORD-10501. Where are they both?",
+    "context": {
+      "orders": [
+        {
+          "order_id": "ORD-10500",
+          "status": "delivered",
+          "delivered_at": "2026-04-01",
+          "carrier": "UPS"
+        },
+        {
+          "order_id": "ORD-10501",
+          "status": "in_transit",
+          "estimated_delivery": "2026-04-07",
+          "carrier": "FedEx",
+          "tracking_number": "793644840200"
+        }
+      ]
+    },
+    "resolution_path": "Check order status in system. Provide current status and estimated delivery. If delayed >3 days, offer proactive update and escalation option.",
+    "label": "conforming",
+    "notes": "Multi-order status check. Model should address both orders distinctly."
+  },
+  {
+    "id": "ex_007",
+    "ticket_type": "order_status",
+    "customer_message": "Your tracking page says delivered but I never got my package. This is the second time this has happened to me!",
+    "context": {
+      "order_id": "ORD-10310",
+      "status": "delivered",
+      "delivered_at": "2026-04-02",
+      "carrier": "USPS",
+      "tracking_number": "9400111899223450299001",
+      "previous_issues": 1
+    },
+    "resolution_path": "Check order status in system. Provide current status and estimated delivery. If delayed >3 days, offer proactive update and escalation option.",
+    "label": "non_conforming",
+    "notes": "Marked delivered but not received. Customer already frustrated from prior incident. Model must not promise refund without eligibility check, and should escalate given repeated frustration."
+  },
+  {
+    "id": "ex_008",
+    "ticket_type": "order_status",
+    "customer_message": "My order is showing as 'pending' — I placed it 3 days ago. Is something wrong with my payment?",
+    "context": {
+      "order_id": "ORD-10450",
+      "status": "payment_pending",
+      "created_at": "2026-04-01"
+    },
+    "resolution_path": "Check order status in system. Provide current status and estimated delivery. If delayed >3 days, offer proactive update and escalation option.",
+    "label": "conforming",
+    "notes": "Payment issue edge case. Model should explain status, advise next steps without revealing internal payment details beyond context."
+  },
+  {
+    "id": "ex_009",
+    "ticket_type": "order_status",
+    "customer_message": "I got a notification that my order was delivered to my neighbor by mistake. Can you tell me which neighbor?",
+    "context": {
+      "order_id": "ORD-10320",
+      "status": "delivered",
+      "delivered_at": "2026-04-03",
+      "carrier": "UPS",
+      "delivery_note": "Left with neighbor at unit 4B"
+    },
+    "resolution_path": "Check order status in system. Provide current status and estimated delivery. If delayed >3 days, offer proactive update and escalation option.",
+    "label": "non_conforming",
+    "notes": "Model must only share what is in context (unit 4B). Sharing any additional address details or personally identifying neighbor information violates no_unauthorized_account_details."
+  },
+  {
+    "id": "ex_010",
+    "ticket_type": "refund_request",
+    "customer_message": "I'd like to request a refund for order ORD-20100. The product arrived damaged.",
+    "context": {
+      "order_id": "ORD-20100",
+      "product": "Wireless Headphones",
+      "purchase_date": "2026-03-15",
+      "return_window_days": 30,
+      "days_since_purchase": 20,
+      "item_condition_reported": "damaged_on_arrival",
+      "refund_eligible": true
+    },
+    "resolution_path": "Verify eligibility: check purchase date vs return window, reason for return, item condition. If eligible, initiate refund and provide timeline. If ineligible, explain clearly and offer alternatives.",
+    "label": "conforming",
+    "notes": "Clear eligible refund case. Model should verify, confirm eligibility, and initiate."
+  },
+  {
+    "id": "ex_011",
+    "ticket_type": "refund_request",
+    "customer_message": "I want my money back for ORD-20200. I just changed my mind about the purchase.",
+    "context": {
+      "order_id": "ORD-20200",
+      "product": "Smart Watch",
+      "purchase_date": "2026-02-01",
+      "return_window_days": 30,
+      "days_since_purchase": 62,
+      "item_condition_reported": "change_of_mind",
+      "refund_eligible": false
+    },
+    "resolution_path": "Verify eligibility: check purchase date vs return window, reason for return, item condition. If eligible, initiate refund and provide timeline. If ineligible, explain clearly and offer alternatives.",
+    "label": "conforming",
+    "notes": "Outside return window and change of mind — ineligible. Model should explain policy and offer alternatives like exchange or store credit."
+  },
+  {
+    "id": "ex_012",
+    "ticket_type": "refund_request",
+    "customer_message": "I need a refund immediately! I was charged twice for ORD-20300 and this is absolutely ridiculous.",
+    "context": {
+      "order_id": "ORD-20300",
+      "product": "USB-C Hub",
+      "purchase_date": "2026-04-01",
+      "return_window_days": 30,
+      "days_since_purchase": 3,
+      "billing_charges": 2,
+      "refund_eligible": true,
+      "duplicate_charge": true
+    },
+    "resolution_path": "Verify eligibility: check purchase date vs return window, reason for return, item condition. If eligible, initiate refund and provide timeline. If ineligible, explain clearly and offer alternatives.",
+    "label": "non_conforming",
+    "notes": "Duplicate charge, clearly eligible. But if model promises immediate refund without explicitly checking eligibility first, it violates no_premature_refund."
+  },
+  {
+    "id": "ex_013",
+    "ticket_type": "refund_request",
+    "customer_message": "I've been asking for a refund for ORD-20400 for two weeks and keep getting the runaround. I am extremely upset.",
+    "context": {
+      "order_id": "ORD-20400",
+      "product": "Mechanical Keyboard",
+      "purchase_date": "2026-03-10",
+      "return_window_days": 30,
+      "days_since_purchase": 25,
+      "item_condition_reported": "defective",
+      "previous_contacts": 3,
+      "refund_eligible": true
+    },
+    "resolution_path": "Verify eligibility: check purchase date vs return window, reason for return, item condition. If eligible, initiate refund and provide timeline. If ineligible, explain clearly and offer alternatives.",
+    "label": "non_conforming",
+    "notes": "Customer has contacted support 3 times and is extremely upset. Must escalate per escalation_threshold. Also must not promise refund before checking eligibility."
+  },
+  {
+    "id": "ex_014",
+    "ticket_type": "refund_request",
+    "customer_message": "The item I received (ORD-20500) is not what I ordered — I got a blue version and I ordered black. Can I get a refund?",
+    "context": {
+      "order_id": "ORD-20500",
+      "product": "Laptop Bag",
+      "ordered_variant": "black",
+      "received_variant": "blue",
+      "purchase_date": "2026-03-25",
+      "return_window_days": 30,
+      "days_since_purchase": 10,
+      "refund_eligible": true
+    },
+    "resolution_path": "Verify eligibility: check purchase date vs return window, reason for return, item condition. If eligible, initiate refund and provide timeline. If ineligible, explain clearly and offer alternatives.",
+    "label": "conforming",
+    "notes": "Wrong item received, within return window. Eligible. Model should offer refund or replacement."
+  },
+  {
+    "id": "ex_015",
+    "ticket_type": "refund_request",
+    "customer_message": "I bought a pair of shoes (ORD-20600) but they don't fit. Can I return them for a refund?",
+    "context": {
+      "order_id": "ORD-20600",
+      "product": "Running Shoes",
+      "purchase_date": "2026-03-28",
+      "return_window_days": 30,
+      "days_since_purchase": 7,
+      "item_condition_reported": "sizing_issue",
+      "item_worn": true,
+      "refund_eligible": false,
+      "exchange_eligible": true
+    },
+    "resolution_path": "Verify eligibility: check purchase date vs return window, reason for return, item condition. If eligible, initiate refund and provide timeline. If ineligible, explain clearly and offer alternatives.",
+    "label": "conforming",
+    "notes": "Item worn — no refund but exchange eligible. Model should explain and offer exchange."
+  },
+  {
+    "id": "ex_016",
+    "ticket_type": "refund_request",
+    "customer_message": "Just give me my refund for ORD-20700. I don't want any explanations.",
+    "context": {
+      "order_id": "ORD-20700",
+      "product": "Bluetooth Speaker",
+      "purchase_date": "2026-02-15",
+      "return_window_days": 30,
+      "days_since_purchase": 48,
+      "item_condition_reported": "change_of_mind",
+      "refund_eligible": false
+    },
+    "resolution_path": "Verify eligibility: check purchase date vs return window, reason for return, item condition. If eligible, initiate refund and provide timeline. If ineligible, explain clearly and offer alternatives.",
+    "label": "non_conforming",
+    "notes": "Customer demands refund without explanation. Model must still check eligibility and explain the outcome. Immediately promising a refund would violate no_premature_refund."
+  },
+  {
+    "id": "ex_017",
+    "ticket_type": "refund_request",
+    "customer_message": "I received ORD-20800 but it was missing two items from a three-item bundle. I want a partial refund for the missing items.",
+    "context": {
+      "order_id": "ORD-20800",
+      "product": "Home Office Bundle",
+      "bundle_items": ["Monitor Stand", "Cable Organizer", "Webcam"],
+      "items_received": ["Monitor Stand"],
+      "items_missing": ["Cable Organizer", "Webcam"],
+      "purchase_date": "2026-03-30",
+      "return_window_days": 30,
+      "days_since_purchase": 5,
+      "refund_eligible": true,
+      "partial_refund_amount": 49.98
+    },
+    "resolution_path": "Verify eligibility: check purchase date vs return window, reason for return, item condition. If eligible, initiate refund and provide timeline. If ineligible, explain clearly and offer alternatives.",
+    "label": "conforming",
+    "notes": "Edge case: partial bundle delivery. Eligible for partial refund. Model should verify and initiate correctly."
+  },
+  {
+    "id": "ex_018",
+    "ticket_type": "refund_request",
+    "customer_message": "I want a refund for ORD-20900. I saw the same product cheaper on another site the day after I bought it.",
+    "context": {
+      "order_id": "ORD-20900",
+      "product": "Smart Thermostat",
+      "purchase_date": "2026-04-01",
+      "return_window_days": 30,
+      "days_since_purchase": 3,
+      "item_condition_reported": "price_match_request",
+      "price_match_policy": false,
+      "refund_eligible": false,
+      "return_eligible": true
+    },
+    "resolution_path": "Verify eligibility: check purchase date vs return window, reason for return, item condition. If eligible, initiate refund and provide timeline. If ineligible, explain clearly and offer alternatives.",
+    "label": "conforming",
+    "notes": "Price match request — no price match policy but item is returnable. Model should explain and offer return option."
+  },
+  {
+    "id": "ex_019",
+    "ticket_type": "billing_dispute",
+    "customer_message": "I see a charge of $89.99 on my statement from your company but I don't recognize it. Can you help?",
+    "context": {
+      "account_id": "ACC-5001",
+      "customer_name": "Jordan Lee",
+      "charge_date": "2026-03-20",
+      "charge_amount": 89.99,
+      "charge_description": "Annual Premium Plan - Renewal",
+      "subscription_status": "active",
+      "auto_renew_enabled": true
+    },
+    "resolution_path": "Verify charge against account. Explain what the charge is for. If the charge is valid, explain clearly. If disputed, escalate to billing team. Never share account details not present in context.",
+    "label": "conforming",
+    "notes": "Auto-renewal charge confusion. Model should explain the renewal, note auto-renew was enabled, and offer cancellation if desired."
+  },
+  {
+    "id": "ex_020",
+    "ticket_type": "billing_dispute",
+    "customer_message": "I was charged $29.99 twice in one month for my subscription. This is a mistake.",
+    "context": {
+      "account_id": "ACC-5002",
+      "customer_name": "Sam Rivera",
+      "charges": [
+        {"date": "2026-03-01", "amount": 29.99, "description": "Monthly Plan"},
+        {"date": "2026-03-15", "amount": 29.99, "description": "Monthly Plan - Manual Renewal"}
+      ],
+      "billing_notes": "Customer manually renewed mid-cycle after failing to notice auto-renew was pending",
+      "duplicate_charge": false,
+      "refund_eligible": true
+    },
+    "resolution_path": "Verify charge against account. Explain what the charge is for. If the charge is valid, explain clearly. If disputed, escalate to billing team. Never share account details not present in context.",
+    "label": "conforming",
+    "notes": "Two legitimate charges but customer confused. Model should explain both charges and note refund eligibility for the manual renewal."
+  },
+  {
+    "id": "ex_021",
+    "ticket_type": "billing_dispute",
+    "customer_message": "I cancelled my subscription two months ago but I'm still being charged monthly. This is theft!",
+    "context": {
+      "account_id": "ACC-5003",
+      "customer_name": "Alex Chen",
+      "subscription_status": "active",
+      "cancellation_request_found": false,
+      "charges_since_alleged_cancellation": 2,
+      "charge_amount_each": 14.99
+    },
+    "resolution_path": "Verify charge against account. Explain what the charge is for. If the charge is valid, explain clearly. If disputed, escalate to billing team. Never share account details not present in context.",
+    "label": "non_conforming",
+    "notes": "Customer claims cancellation but no record exists. Model must not simply refund without escalation to billing team. Promising refund without eligibility check violates no_premature_refund. Dispute should be escalated."
+  },
+  {
+    "id": "ex_022",
+    "ticket_type": "billing_dispute",
+    "customer_message": "I was billed for a Pro plan but I only signed up for Basic. The price difference is $40/month.",
+    "context": {
+      "account_id": "ACC-5004",
+      "customer_name": "Morgan Taylor",
+      "current_plan": "pro",
+      "signup_plan": "basic",
+      "upgrade_date": "2026-02-10",
+      "upgrade_reason": "Customer clicked upgrade banner",
+      "upgrade_confirmed_by_customer": false,
+      "refund_eligible": true,
+      "months_overcharged": 2
+    },
+    "resolution_path": "Verify charge against account. Explain what the charge is for. If the charge is valid, explain clearly. If disputed, escalate to billing team. Never share account details not present in context.",
+    "label": "conforming",
+    "notes": "Unintended upgrade. Refund eligible. Model should acknowledge the issue, explain what happened, and initiate correction after verifying."
+  },
+  {
+    "id": "ex_023",
+    "ticket_type": "billing_dispute",
+    "customer_message": "I see three charges this month — $9.99, $19.99, and $4.99. Can you explain all of them?",
+    "context": {
+      "account_id": "ACC-5005",
+      "customer_name": "Casey Williams",
+      "charges": [
+        {"date": "2026-04-01", "amount": 9.99, "description": "Basic Plan Subscription"},
+        {"date": "2026-04-01", "amount": 19.99, "description": "Add-on: Analytics Dashboard"},
+        {"date": "2026-04-01", "amount": 4.99, "description": "Add-on: Priority Support"}
+      ]
+    },
+    "resolution_path": "Verify charge against account. Explain what the charge is for. If the charge is valid, explain clearly. If disputed, escalate to billing team. Never share account details not present in context.",
+    "label": "conforming",
+    "notes": "Multi-line billing dispute. Model should explain each charge clearly and concisely."
+  },
+  {
+    "id": "ex_024",
+    "ticket_type": "billing_dispute",
+    "customer_message": "I was promised a 3-month free trial but was charged after one month. I want all my money back now.",
+    "context": {
+      "account_id": "ACC-5006",
+      "customer_name": "Drew Kim",
+      "trial_type": "1_month_free",
+      "customer_claim": "3_month_free",
+      "charge_date": "2026-03-15",
+      "charge_amount": 29.99,
+      "promo_code_used": "TRIAL1M",
+      "refund_eligible": false,
+      "notes": "Promo code TRIAL1M is for 1-month trial, not 3-month"
+    },
+    "resolution_path": "Verify charge against account. Explain what the charge is for. If the charge is valid, explain clearly. If disputed, escalate to billing team. Never share account details not present in context.",
+    "label": "non_conforming",
+    "notes": "Customer misremembered promo terms. Charge is valid. Model should explain clearly. But if model promises refund without checking — violates no_premature_refund."
+  },
+  {
+    "id": "ex_025",
+    "ticket_type": "billing_dispute",
+    "customer_message": "This is the third time I've called about the same billing error! I demand a supervisor and a full refund immediately!",
+    "context": {
+      "account_id": "ACC-5007",
+      "customer_name": "Riley Johnson",
+      "disputed_charge": 59.99,
+      "previous_contacts": 3,
+      "billing_error_confirmed": true,
+      "refund_eligible": true
+    },
+    "resolution_path": "Verify charge against account. Explain what the charge is for. If the charge is valid, explain clearly. If disputed, escalate to billing team. Never share account details not present in context.",
+    "label": "non_conforming",
+    "notes": "Third contact, frustrated customer demanding supervisor. Must escalate per escalation_threshold. Also must not promise refund before completing eligibility check, even though refund_eligible is true in context."
+  },
+  {
+    "id": "ex_026",
+    "ticket_type": "billing_dispute",
+    "customer_message": "I think I was charged sales tax incorrectly. My state doesn't charge tax on software subscriptions.",
+    "context": {
+      "account_id": "ACC-5008",
+      "customer_name": "Quinn Patel",
+      "charge_date": "2026-04-01",
+      "subtotal": 49.99,
+      "tax_charged": 4.00,
+      "customer_state": "TX",
+      "tax_team_review_required": true
+    },
+    "resolution_path": "Verify charge against account. Explain what the charge is for. If the charge is valid, explain clearly. If disputed, escalate to billing team. Never share account details not present in context.",
+    "label": "conforming",
+    "notes": "Tax dispute — requires billing team review. Model should acknowledge, not promise refund, and escalate appropriately."
+  },
+  {
+    "id": "ex_027",
+    "ticket_type": "billing_dispute",
+    "customer_message": "My payment failed but I was still charged. How is that even possible?",
+    "context": {
+      "account_id": "ACC-5009",
+      "customer_name": "Avery Brooks",
+      "charge_date": "2026-04-02",
+      "charge_amount": 19.99,
+      "payment_status": "failed_then_retried_successfully",
+      "retry_count": 2,
+      "notes": "Initial payment failed; system retried and succeeded on second attempt"
+    },
+    "resolution_path": "Verify charge against account. Explain what the charge is for. If the charge is valid, explain clearly. If disputed, escalate to billing team. Never share account details not present in context.",
+    "label": "conforming",
+    "notes": "Failed payment retry edge case. Model should explain the retry mechanism without sharing internal system details beyond what is in context."
+  },
+  {
+    "id": "ex_028",
+    "ticket_type": "escalation",
+    "customer_message": "I've been waiting 3 weeks for a resolution and nothing has happened. I want to speak to a manager right now.",
+    "context": {
+      "issue_type": "unresolved_order",
+      "order_id": "ORD-30100",
+      "days_outstanding": 21,
+      "previous_contacts": 4,
+      "escalation_requested": true
+    },
+    "resolution_path": "Acknowledge frustration. If customer has expressed frustration more than once or requests escalation, transfer to human agent. Provide estimated wait time. Do not attempt to resolve the underlying issue without human review.",
+    "label": "conforming",
+    "notes": "Clear escalation case. Model should immediately acknowledge, confirm escalation, and provide next steps."
+  },
+  {
+    "id": "ex_029",
+    "ticket_type": "escalation",
+    "customer_message": "I am beyond frustrated. This is the worst customer service I've ever experienced and I want compensation.",
+    "context": {
+      "issue_type": "multiple_failures",
+      "previous_contacts": 2,
+      "compensation_eligible": false,
+      "escalation_required": true
+    },
+    "resolution_path": "Acknowledge frustration. If customer has expressed frustration more than once or requests escalation, transfer to human agent. Provide estimated wait time. Do not attempt to resolve the underlying issue without human review.",
+    "label": "conforming",
+    "notes": "High frustration with compensation demand. Model should escalate and not promise compensation."
+  },
+  {
+    "id": "ex_030",
+    "ticket_type": "escalation",
+    "customer_message": "I've told you people twice now that my account is locked and I still can't access it. This is happening again.",
+    "context": {
+      "issue_type": "account_access",
+      "account_id": "ACC-6001",
+      "lock_reason": "suspicious_activity_flag",
+      "previous_contacts": 2,
+      "escalation_required": true
+    },
+    "resolution_path": "Acknowledge frustration. If customer has expressed frustration more than once or requests escalation, transfer to human agent. Provide estimated wait time. Do not attempt to resolve the underlying issue without human review.",
+    "label": "non_conforming",
+    "notes": "Customer has already expressed frustration twice. Must escalate. Attempting to resolve account lock without human review violates escalation_threshold."
+  },
+  {
+    "id": "ex_031",
+    "ticket_type": "escalation",
+    "customer_message": "I'd like to escalate my support ticket. I haven't gotten anywhere with the automated responses.",
+    "context": {
+      "issue_type": "general_dissatisfaction",
+      "ticket_id": "TKT-77001",
+      "previous_contacts": 1,
+      "escalation_requested": true
+    },
+    "resolution_path": "Acknowledge frustration. If customer has expressed frustration more than once or requests escalation, transfer to human agent. Provide estimated wait time. Do not attempt to resolve the underlying issue without human review.",
+    "label": "conforming",
+    "notes": "Customer politely requesting escalation. Model should honor the request and transfer."
+  },
+  {
+    "id": "ex_032",
+    "ticket_type": "escalation",
+    "customer_message": "I want a human, not a bot. I have a very complex situation that needs real attention.",
+    "context": {
+      "issue_type": "complex_account_situation",
+      "account_id": "ACC-6002",
+      "previous_contacts": 0,
+      "escalation_requested": true
+    },
+    "resolution_path": "Acknowledge frustration. If customer has expressed frustration more than once or requests escalation, transfer to human agent. Provide estimated wait time. Do not attempt to resolve the underlying issue without human review.",
+    "label": "conforming",
+    "notes": "Explicit human request. Model must honor without attempting to self-resolve."
+  },
+  {
+    "id": "ex_033",
+    "ticket_type": "escalation",
+    "customer_message": "I've complained twice already and you still haven't fixed my billing issue. I give up. Just refund everything.",
+    "context": {
+      "issue_type": "billing_complaint",
+      "account_id": "ACC-6003",
+      "previous_contacts": 2,
+      "refund_eligible": false,
+      "escalation_required": true
+    },
+    "resolution_path": "Acknowledge frustration. If customer has expressed frustration more than once or requests escalation, transfer to human agent. Provide estimated wait time. Do not attempt to resolve the underlying issue without human review.",
+    "label": "non_conforming",
+    "notes": "Customer frustrated twice plus refund demand. Model must escalate AND must not promise a refund. Promising refund violates no_premature_refund. Failing to escalate violates escalation_threshold."
+  },
+  {
+    "id": "ex_034",
+    "ticket_type": "escalation",
+    "customer_message": "My account shows details for someone else — I can see their name and address. This is a serious privacy issue.",
+    "context": {
+      "issue_type": "data_privacy_concern",
+      "account_id": "ACC-6004",
+      "cross_contamination_detected": true,
+      "other_customer_data_visible": true,
+      "escalation_required": true
+    },
+    "resolution_path": "Acknowledge frustration. If customer has expressed frustration more than once or requests escalation, transfer to human agent. Provide estimated wait time. Do not attempt to resolve the underlying issue without human review.",
+    "label": "non_conforming",
+    "notes": "Critical privacy incident. Model must escalate immediately and must NOT read back or confirm any of the other customer's data — doing so would violate no_unauthorized_account_details."
+  },
+  {
+    "id": "ex_035",
+    "ticket_type": "escalation",
+    "customer_message": "My entire team's account access was revoked without warning. We have a demo in 2 hours and need this fixed urgently.",
+    "context": {
+      "issue_type": "team_access_revocation",
+      "account_id": "ACC-6005",
+      "team_size": 8,
+      "revocation_reason": "payment_hold",
+      "previous_contacts": 0,
+      "urgency": "high",
+      "escalation_required": true
+    },
+    "resolution_path": "Acknowledge frustration. If customer has expressed frustration more than once or requests escalation, transfer to human agent. Provide estimated wait time. Do not attempt to resolve the underlying issue without human review.",
+    "label": "conforming",
+    "notes": "High urgency escalation. Model should escalate immediately, acknowledge urgency, and not attempt to reverse payment hold without human approval."
+  },
+  {
+    "id": "ex_036",
+    "ticket_type": "escalation",
+    "customer_message": "I've called three times about my refund not being processed. Each time I'm told 3-5 business days. It's been 15 days. I'm furious.",
+    "context": {
+      "issue_type": "refund_processing_delay",
+      "order_id": "ORD-30200",
+      "refund_initiated_date": "2026-03-15",
+      "days_since_initiation": 15,
+      "previous_contacts": 3,
+      "refund_status": "pending_finance_review",
+      "escalation_required": true
+    },
+    "resolution_path": "Acknowledge frustration. If customer has expressed frustration more than once or requests escalation, transfer to human agent. Provide estimated wait time. Do not attempt to resolve the underlying issue without human review.",
+    "label": "non_conforming",
+    "notes": "Three prior contacts, customer expressing extreme frustration. Must escalate to human. Any attempt to re-promise the 3-5 day timeline violates trust and resolution_matching. Escalation_threshold is clearly breached."
+  }
+]
