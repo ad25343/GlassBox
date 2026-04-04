@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uvicorn:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(pip:*)",
+      "Bash(python:*)",
+      "Bash(git:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)"
+    ]
+  }
+}
