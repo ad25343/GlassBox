@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Play, Bookmark, CheckCircle2, AlertTriangle, Loader2, Terminal } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Play, Bookmark, CheckCircle2, AlertTriangle, Loader2, Terminal, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -63,6 +63,7 @@ function deriveNonNegotiableSummary(snapshot: SnapshotResponse): string {
 export default function TestSuitePage() {
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-5')
   const [showInternals, setShowInternals] = useState(false)
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<number | null>(null)
   const queryClient = useQueryClient()
 
   const { data: snapshots, isLoading: snapshotsLoading } = useQuery({
@@ -70,15 +71,32 @@ export default function TestSuitePage() {
     queryFn: () => getSnapshots('test'),
   })
 
-  const snapshot: SnapshotResponse | null =
-    snapshots && snapshots.length > 0 ? snapshots[snapshots.length - 1] : null
+  // Keep selectedSnapshotId pointing at a valid id (default to latest)
+  useEffect(() => {
+    if (snapshots && snapshots.length > 0) {
+      const latest = snapshots[snapshots.length - 1]
+      setSelectedSnapshotId((prev) => {
+        // If no selection or selection was reset, default to latest
+        if (prev === null) return latest.id ?? null
+        // If the selection no longer exists in the list (shouldn't happen), reset
+        const still = snapshots.find((s) => s.id === prev)
+        return still ? prev : (latest.id ?? null)
+      })
+    }
+  }, [snapshots])
 
+  // After a new run completes, reset selection so useEffect picks the new latest
   const runMutation = useMutation({
     mutationFn: () => triggerSnapshot(selectedModel, 'test'),
     onSuccess: () => {
+      setSelectedSnapshotId(null)
       queryClient.invalidateQueries({ queryKey: ['snapshots'] })
     },
   })
+
+  const snapshot: SnapshotResponse | null = snapshots
+    ? (snapshots.find((s) => s.id === selectedSnapshotId) ?? (snapshots.length > 0 ? snapshots[snapshots.length - 1] : null))
+    : null
 
   const isRunning = runMutation.isPending
 
@@ -147,6 +165,86 @@ export default function TestSuitePage() {
           )}
         </div>
 
+        {/* Run History */}
+        {!snapshotsLoading && snapshots && snapshots.length > 0 && (
+          <Card>
+            <CardHeader className="border-b pb-3">
+              <CardTitle className="text-sm font-medium flex items-center justify-between">
+                Run History
+                <span className="text-xs font-normal text-muted-foreground">{snapshots.length} run{snapshots.length !== 1 ? 's' : ''}</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Model</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Overall</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Non-Negotiables</th>
+                    <th className="px-4 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...snapshots].reverse().map((s) => {
+                    const isSelected = s.id === (snapshot?.id)
+                    const color = scoreColor(s.overall_conformance, 0.9, 0.8)
+                    const nnSummary = deriveNonNegotiableSummary(s)
+                    const allPassed = !nnSummary.startsWith('0') && nnSummary.includes('3/3')
+                    return (
+                      <tr
+                        key={s.id}
+                        onClick={() => setSelectedSnapshotId(s.id)}
+                        className={cn(
+                          'border-b last:border-0 cursor-pointer transition-colors',
+                          isSelected ? 'bg-muted/40' : 'hover:bg-muted/20'
+                        )}
+                      >
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{new Date(s.created_at).toLocaleDateString()}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleTimeString()}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{s.model}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-sm font-semibold" style={{ color }}>
+                            {(s.overall_conformance * 100).toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs font-medium" style={{ color: allPassed ? '#0D9488' : '#F43F5E' }}>
+                            {allPassed ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 inline mr-1" style={{ color: '#0D9488' }} />
+                            ) : (
+                              <AlertTriangle className="h-3.5 w-3.5 inline mr-1" style={{ color: '#F43F5E' }} />
+                            )}
+                            {nnSummary}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {isSelected ? (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground inline" />
+                          ) : null}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Selected run label */}
+        {snapshot && snapshots && snapshots.length > 1 && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground -mb-2">
+            <span>Showing results for:</span>
+            <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{new Date(snapshot.created_at).toLocaleString()}</span>
+            <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{snapshot.model}</span>
+          </div>
+        )}
+
         {/* Summary cards */}
         {snapshotsLoading ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -206,7 +304,9 @@ export default function TestSuitePage() {
             </Card>
             <Card>
               <CardHeader className="pb-1">
-                <CardTitle className="text-xs font-medium text-muted-foreground">Last Run</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground">
+                  {snapshot.id === snapshots?.[snapshots.length - 1]?.id ? 'Last Run' : 'Selected Run'}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold">
