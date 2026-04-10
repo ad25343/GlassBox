@@ -113,8 +113,11 @@ export default function TestSuitePage() {
   // Filter history to the selected model
   const modelSnapshots = snapshots ? snapshots.filter((s) => s.model === selectedModel) : []
 
+  // Always resolve to a concrete id — default to latest when nothing explicitly selected
+  const effectiveSnapshotId = selectedSnapshotId ?? (modelSnapshots.length > 0 ? modelSnapshots[modelSnapshots.length - 1].id : null)
+
   const snapshot: SnapshotResponse | null = modelSnapshots.length > 0
-    ? (modelSnapshots.find((s) => s.id === selectedSnapshotId) ?? modelSnapshots[modelSnapshots.length - 1])
+    ? (modelSnapshots.find((s) => s.id === effectiveSnapshotId) ?? modelSnapshots[modelSnapshots.length - 1])
     : null
 
   const isRunning = runMutation.isPending
@@ -214,7 +217,7 @@ export default function TestSuitePage() {
                 </thead>
                 <tbody>
                   {[...modelSnapshots].reverse().map((s) => {
-                    const isSelected = s.id === (snapshot?.id)
+                    const isSelected = s.id === effectiveSnapshotId
                     const color = scoreColor(s.overall_conformance, 0.9, 0.8)
                     const nnSummary = deriveNonNegotiableSummary(s)
                     const allPassed = !nnSummary.startsWith('0') && nnSummary.includes('3/3')
@@ -224,8 +227,9 @@ export default function TestSuitePage() {
                         onClick={() => setSelectedSnapshotId(s.id)}
                         className={cn(
                           'border-b last:border-0 cursor-pointer transition-colors',
-                          isSelected ? 'bg-muted/40' : 'hover:bg-muted/20'
+                          isSelected ? 'bg-muted/30' : 'hover:bg-muted/20'
                         )}
+                        style={isSelected ? { borderLeft: '3px solid #0D9488' } : { borderLeft: '3px solid transparent' }}
                       >
                         <td className="px-4 py-3">
                           <p className="font-medium">{new Date(s.created_at).toLocaleDateString()}</p>
@@ -258,15 +262,6 @@ export default function TestSuitePage() {
               </table>
             </CardContent>
           </Card>
-        )}
-
-        {/* Selected run label */}
-        {snapshot && modelSnapshots.length > 1 && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground -mb-2">
-            <span>Showing results for:</span>
-            <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{new Date(snapshot.created_at).toLocaleString()}</span>
-            <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{snapshot.model}</span>
-          </div>
         )}
 
         {/* Summary cards */}
