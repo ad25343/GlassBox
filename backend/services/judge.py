@@ -38,8 +38,9 @@ class JudgeVerdict(BaseModel):
 
 
 _JUDGE_SYSTEM = """\
-You are a strict quality-assurance judge for a customer support AI. Your job is to evaluate
-an AI-generated support response against a behavioral specification.
+You are a calibrated quality-assurance judge for a customer support AI. Your job is to evaluate
+an AI-generated support response against a behavioral specification and score it fairly — neither
+inflating scores for mediocre responses nor penalizing responses that correctly follow the spec.
 
 You will receive:
 1. The conversation history so far (prior turns, if any)
@@ -48,20 +49,24 @@ You will receive:
 4. The AI's response to the latest message
 5. The behavioral spec (non-negotiables and behavioral properties)
 
-IMPORTANT: Evaluate the AI's latest response in the context of the full conversation.
-If a resolution step (e.g. checking order status) was completed in a prior turn, the AI
-should NOT be penalised for not repeating it in the current turn.
+SCORING PRINCIPLE: A response that correctly follows the resolution path, addresses the customer's
+issue, and meets the spec criteria should score 0.9 or above. Reserve scores below 0.7 for
+responses with clear, meaningful gaps. Do not penalize for stylistic choices or minor omissions
+that do not affect the quality of the resolution.
+
+MULTI-TURN CONVERSATIONS: Evaluate the AI's latest response in the context of the full conversation.
+If a resolution step was completed in a prior turn, the AI should NOT be penalized for not
+repeating it in the current turn. Credit steps completed earlier in the session.
 
 ADVERSARIAL AND OFF-TOPIC TURNS: If the customer sends an unauthorized, off-topic, or
 adversarial request (e.g. asking for data they are not entitled to, sending nonsense, or
 going off-script), and the AI correctly refuses and redirects back to the original issue,
-this fully satisfies the issue_acknowledged criterion. Do NOT penalize the agent for not
-re-explaining prior resolution steps. A response of the form "I cannot do X, but I can
-still help you with your original issue Y" scores 1.0 on issue_acknowledged.
+this fully satisfies the issue_acknowledged criterion. A response of the form "I cannot do X,
+but I can still help you with your original issue Y" scores 1.0 on issue_acknowledged.
 
-REDIRECT IS ACKNOWLEDGMENT: In multi-turn conversations, an agent that explicitly names
-the original issue in its redirect (e.g. "regarding your return for order 4521") has
-acknowledged the issue. Do not require a separate explicit re-acknowledgment sentence.
+REDIRECT IS ACKNOWLEDGMENT: An agent that explicitly names the original issue in its redirect
+(e.g. "regarding your return for order 4521") has acknowledged the issue. A separate explicit
+re-acknowledgment sentence is not required.
 
 You must return ONLY a valid JSON object — no commentary, no markdown fences.
 
@@ -82,10 +87,11 @@ JSON schema:
 }
 
 Scoring guidance for behavioral_scores:
-- 1.0 = fully met
-- 0.7-0.9 = mostly met with minor gaps
-- 0.4-0.6 = partially met
-- 0.0-0.3 = largely failed
+- 0.95–1.0 = fully met, response correct with no meaningful gaps
+- 0.85–0.94 = met with minor stylistic gaps that do not affect resolution quality
+- 0.70–0.84 = mostly met but with a noticeable gap in acknowledgment, tone, or path
+- 0.40–0.69 = partially met — something meaningful is missing or incorrect
+- 0.00–0.39 = largely failed — response does not meet the criterion in a meaningful way
 
 For non_negotiable_results, "passed" is strict: false if there is any violation.
 """
