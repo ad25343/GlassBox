@@ -50,13 +50,30 @@ function StatusIcon({ status }: { status: ConformanceStatus }) {
   return <AlertTriangle className="h-4 w-4 inline mr-1" style={{ color: '#F59E0B' }} />
 }
 
+// Snapshot non_negotiable_results use aggregate format: { pass_rate: number, total: number }
+// Single-run verdicts use: { passed: boolean, reasoning: string }
+// Handle both.
+function isNnPassing(result: unknown): boolean {
+  if (result === null || typeof result !== 'object') return false
+  const r = result as Record<string, unknown>
+  if ('pass_rate' in r) return (r.pass_rate as number) >= 1.0
+  if ('passed' in r) return r.passed === true
+  return false
+}
+
+function nnPassRate(result: unknown): number | null {
+  if (result === null || typeof result !== 'object') return null
+  const r = result as Record<string, unknown>
+  if ('pass_rate' in r) return r.pass_rate as number
+  if ('passed' in r) return r.passed ? 1.0 : 0.0
+  return null
+}
+
 function deriveNonNegotiableSummary(snapshot: SnapshotResponse): string {
   const results = snapshot.non_negotiable_results
   if (!results || Object.keys(results).length === 0) return '3/3 Passing'
   const total = Object.keys(results).length
-  const passing = Object.values(results).filter(
-    (r) => r !== null && typeof r === 'object' && (r as { passed?: boolean }).passed === true
-  ).length
+  const passing = Object.values(results).filter(isNnPassing).length
   return `${passing}/${total} Passing`
 }
 
@@ -71,19 +88,18 @@ export default function TestSuitePage() {
     queryFn: () => getSnapshots('test'),
   })
 
-  // Keep selectedSnapshotId pointing at a valid id (default to latest)
+  // When model changes or snapshots update, reset to latest for that model
   useEffect(() => {
     if (snapshots && snapshots.length > 0) {
-      const latest = snapshots[snapshots.length - 1]
-      setSelectedSnapshotId((prev) => {
-        // If no selection or selection was reset, default to latest
-        if (prev === null) return latest.id ?? null
-        // If the selection no longer exists in the list (shouldn't happen), reset
-        const still = snapshots.find((s) => s.id === prev)
-        return still ? prev : (latest.id ?? null)
-      })
+      const filtered = snapshots.filter((s) => s.model === selectedModel)
+      if (filtered.length > 0) {
+        const latest = filtered[filtered.length - 1]
+        setSelectedSnapshotId(latest.id ?? null)
+      } else {
+        setSelectedSnapshotId(null)
+      }
     }
-  }, [snapshots])
+  }, [snapshots, selectedModel])
 
   // After a new run completes, reset selection so useEffect picks the new latest
   const runMutation = useMutation({
@@ -94,8 +110,11 @@ export default function TestSuitePage() {
     },
   })
 
-  const snapshot: SnapshotResponse | null = snapshots
-    ? (snapshots.find((s) => s.id === selectedSnapshotId) ?? (snapshots.length > 0 ? snapshots[snapshots.length - 1] : null))
+  // Filter history to the selected model
+  const modelSnapshots = snapshots ? snapshots.filter((s) => s.model === selectedModel) : []
+
+  const snapshot: SnapshotResponse | null = modelSnapshots.length > 0
+    ? (modelSnapshots.find((s) => s.id === selectedSnapshotId) ?? modelSnapshots[modelSnapshots.length - 1])
     : null
 
   const isRunning = runMutation.isPending
@@ -166,12 +185,12 @@ export default function TestSuitePage() {
         </div>
 
         {/* Run History */}
-        {!snapshotsLoading && snapshots && snapshots.length > 0 && (
+        {!snapshotsLoading && modelSnapshots.length > 0 && (
           <Card>
             <CardHeader className="border-b pb-3">
               <CardTitle className="text-sm font-medium flex items-center justify-between">
                 Run History
-                <span className="text-xs font-normal text-muted-foreground">{snapshots.length} run{snapshots.length !== 1 ? 's' : ''}</span>
+                <span className="text-xs font-normal text-muted-foreground">{modelSnapshots.length} run{modelSnapshots.length !== 1 ? 's' : ''}</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -179,14 +198,13 @@ export default function TestSuitePage() {
                 <thead>
                   <tr className="border-b">
                     <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Model</th>
                     <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Overall</th>
                     <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Non-Negotiables</th>
                     <th className="px-4 py-2.5" />
                   </tr>
                 </thead>
                 <tbody>
-                  {[...snapshots].reverse().map((s) => {
+                  {[...modelSnapshots].reverse().map((s) => {
                     const isSelected = s.id === (snapshot?.id)
                     const color = scoreColor(s.overall_conformance, 0.9, 0.8)
                     const nnSummary = deriveNonNegotiableSummary(s)
@@ -203,9 +221,6 @@ export default function TestSuitePage() {
                         <td className="px-4 py-3">
                           <p className="font-medium">{new Date(s.created_at).toLocaleDateString()}</p>
                           <p className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleTimeString()}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{s.model}</span>
                         </td>
                         <td className="px-4 py-3">
                           <span className="font-mono text-sm font-semibold" style={{ color }}>
@@ -237,7 +252,7 @@ export default function TestSuitePage() {
         )}
 
         {/* Selected run label */}
-        {snapshot && snapshots && snapshots.length > 1 && (
+        {snapshot && modelSnapshots.length > 1 && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground -mb-2">
             <span>Showing results for:</span>
             <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{new Date(snapshot.created_at).toLocaleString()}</span>
@@ -305,7 +320,7 @@ export default function TestSuitePage() {
             <Card>
               <CardHeader className="pb-1">
                 <CardTitle className="text-xs font-medium text-muted-foreground">
-                  {snapshot.id === snapshots?.[snapshots.length - 1]?.id ? 'Last Run' : 'Selected Run'}
+                  {snapshot.id === modelSnapshots[modelSnapshots.length - 1]?.id ? 'Last Run' : 'Selected Run'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -428,10 +443,9 @@ export default function TestSuitePage() {
             </CardHeader>
             <CardContent className="p-4 space-y-2">
               {Object.entries(snapshot.non_negotiable_results).map(([key, result], i) => {
-                const passed =
-                  result !== null &&
-                  typeof result === 'object' &&
-                  (result as { passed?: boolean }).passed === true
+                const passed = isNnPassing(result)
+                const rate = nnPassRate(result)
+                const isAggregate = result !== null && typeof result === 'object' && 'pass_rate' in (result as object)
                 return (
                   <div key={key} className={cn('flex items-center justify-between gap-3 py-2', i > 0 && 'border-t')}>
                     <div className="flex items-center gap-2">
@@ -447,16 +461,23 @@ export default function TestSuitePage() {
                           .join(' ')}
                       </span>
                     </div>
-                    <Badge
-                      className="text-xs"
-                      style={
-                        passed
-                          ? { backgroundColor: '#0D9488', color: '#fff' }
-                          : { backgroundColor: '#F43F5E', color: '#fff' }
-                      }
-                    >
-                      {passed ? 'PASS' : 'FAIL'}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {isAggregate && rate !== null && (
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {(rate * 100).toFixed(0)}% pass rate
+                        </span>
+                      )}
+                      <Badge
+                        className="text-xs"
+                        style={
+                          passed
+                            ? { backgroundColor: '#0D9488', color: '#fff' }
+                            : { backgroundColor: '#F43F5E', color: '#fff' }
+                        }
+                      >
+                        {passed ? 'PASS' : 'FAIL'}
+                      </Badge>
+                    </div>
                   </div>
                 )
               })}
