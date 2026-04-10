@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Play, Bookmark, CheckCircle2, AlertTriangle, Loader2, Terminal, ChevronRight } from 'lucide-react'
+import { Play, Bookmark, CheckCircle2, AlertTriangle, Loader2, Terminal, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { InfoTooltip, ScoreTooltip, PROPERTY_DESCRIPTIONS } from '@/components/ui/score-tooltip'
 import { cn } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getSnapshots, triggerSnapshot, type SnapshotResponse } from '@/lib/api'
+import { getSnapshots, triggerSnapshot, getSnapshotExamples, type SnapshotResponse, type SnapshotExampleItem } from '@/lib/api'
 
 interface PropertyConfig {
   id: string
@@ -118,6 +118,15 @@ export default function TestSuitePage() {
     : null
 
   const isRunning = runMutation.isPending
+
+  const { data: examples } = useQuery({
+    queryKey: ['snapshot-examples', snapshot?.id],
+    queryFn: () => getSnapshotExamples(snapshot!.id!),
+    enabled: snapshot?.id != null,
+  })
+
+  const [expandedProp, setExpandedProp] = useState<string | null>(null)
+  const [expandedNn, setExpandedNn] = useState<string | null>(null)
 
   return (
     <div className="flex flex-col h-full">
@@ -385,45 +394,86 @@ export default function TestSuitePage() {
                     const score = snapshot.property_scores[prop.id] ?? 0
                     const color = scoreColor(score, prop.target, prop.alertThreshold)
                     const status = getStatus(score, prop.target, prop.alertThreshold)
+                    const isExpanded = expandedProp === prop.id
+                    const propExamples = examples
+                      ? [...examples].sort((a, b) => (a.property_scores[prop.id] ?? 0) - (b.property_scores[prop.id] ?? 0))
+                      : []
                     return (
-                      <tr
-                        key={prop.id}
-                        className={cn('border-b last:border-0 hover:bg-muted/20 transition-colors', i % 2 === 0 ? '' : 'bg-muted/30')}
-                      >
-                        <td className="px-4 py-3 font-medium">
-                          <span className="flex items-center">
-                            {prop.displayName}
-                            <InfoTooltip text={PROPERTY_DESCRIPTIONS[prop.id] ?? prop.displayName} />
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <ScoreTooltip value={score} target={prop.target} alertThreshold={prop.alertThreshold}>
-                            <div className="flex items-center gap-2">
-                              <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
-                                <div
-                                  className="h-full rounded-full"
-                                  style={{ width: `${score * 100}%`, backgroundColor: color }}
-                                />
+                      <>
+                        <tr
+                          key={prop.id}
+                          onClick={() => setExpandedProp(isExpanded ? null : prop.id)}
+                          className={cn('border-b cursor-pointer transition-colors', i % 2 === 0 ? '' : 'bg-muted/10', isExpanded ? 'bg-muted/30' : 'hover:bg-muted/20')}
+                        >
+                          <td className="px-4 py-3 font-medium">
+                            <span className="flex items-center gap-1">
+                              {isExpanded
+                                ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                              }
+                              {prop.displayName}
+                              <InfoTooltip text={PROPERTY_DESCRIPTIONS[prop.id] ?? prop.displayName} />
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <ScoreTooltip value={score} target={prop.target} alertThreshold={prop.alertThreshold}>
+                              <div className="flex items-center gap-2">
+                                <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full"
+                                    style={{ width: `${score * 100}%`, backgroundColor: color }}
+                                  />
+                                </div>
+                                <span className="font-mono text-xs font-medium" style={{ color }}>
+                                  {(score * 100).toFixed(1)}%
+                                </span>
                               </div>
-                              <span className="font-mono text-xs font-medium" style={{ color }}>
-                                {(score * 100).toFixed(1)}%
-                              </span>
-                            </div>
-                          </ScoreTooltip>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
-                          &gt;{(prop.target * 100).toFixed(0)}%
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
-                          {(prop.alertThreshold * 100).toFixed(0)}%
-                        </td>
-                        <td className="px-4 py-3">
-                          <span style={{ color }} className="font-medium text-xs">
-                            <StatusIcon status={status} />
-                            {statusLabel(status)}
-                          </span>
-                        </td>
-                      </tr>
+                            </ScoreTooltip>
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
+                            &gt;{(prop.target * 100).toFixed(0)}%
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
+                            {(prop.alertThreshold * 100).toFixed(0)}%
+                          </td>
+                          <td className="px-4 py-3">
+                            <span style={{ color }} className="font-medium text-xs">
+                              <StatusIcon status={status} />
+                              {statusLabel(status)}
+                            </span>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr key={`${prop.id}-expanded`} className="border-b bg-muted/5">
+                            <td colSpan={5} className="px-4 py-3">
+                              {!examples ? (
+                                <p className="text-xs text-muted-foreground">Loading examples...</p>
+                              ) : (
+                                <div className="space-y-1">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                                    All 36 examples — sorted by score (worst first)
+                                  </p>
+                                  <div className="grid gap-1">
+                                    {propExamples.map((ex) => {
+                                      const exScore = ex.property_scores[prop.id] ?? 0
+                                      const exColor = scoreColor(exScore, prop.target, prop.alertThreshold)
+                                      return (
+                                        <div key={ex.id} className="flex items-start gap-3 py-1.5 border-b border-border/40 last:border-0">
+                                          <span className="font-mono text-xs font-semibold w-12 flex-shrink-0 mt-0.5" style={{ color: exColor }}>
+                                            {(exScore * 100).toFixed(0)}%
+                                          </span>
+                                          <span className="text-xs bg-muted px-1.5 py-0.5 rounded flex-shrink-0">{ex.ticket_type}</span>
+                                          <span className="text-xs text-muted-foreground leading-relaxed">{ex.customer_message_truncated}</span>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     )
                   })}
                 </tbody>
@@ -441,43 +491,72 @@ export default function TestSuitePage() {
               <InfoTooltip text="Binary rules with zero tolerance. The runtime enforces these in the system prompt and retries once if the judge flags a violation. Failures here are critical — they indicate the model broke a hard policy constraint." />
             </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 space-y-2">
+            <CardContent className="p-0">
               {Object.entries(snapshot.non_negotiable_results).map(([key, result], i) => {
                 const passed = isNnPassing(result)
                 const rate = nnPassRate(result)
-                const isAggregate = result !== null && typeof result === 'object' && 'pass_rate' in (result as object)
+                const isExpanded = expandedNn === key
+                const failedExamples = examples ? examples.filter((ex) => !ex.non_negotiables_passed) : []
+                const label = key.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
                 return (
-                  <div key={key} className={cn('flex items-center justify-between gap-3 py-2', i > 0 && 'border-t')}>
-                    <div className="flex items-center gap-2">
-                      {passed ? (
-                        <CheckCircle2 className="h-4 w-4 flex-shrink-0" style={{ color: '#0D9488' }} />
-                      ) : (
-                        <AlertTriangle className="h-4 w-4 flex-shrink-0" style={{ color: '#F43F5E' }} />
-                      )}
-                      <span className="text-sm">
-                        {key
-                          .split('_')
-                          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                          .join(' ')}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {isAggregate && rate !== null && (
-                        <span className="text-xs text-muted-foreground font-mono">
-                          {(rate * 100).toFixed(0)}% pass rate
-                        </span>
-                      )}
-                      <Badge
-                        className="text-xs"
-                        style={
-                          passed
-                            ? { backgroundColor: '#0D9488', color: '#fff' }
-                            : { backgroundColor: '#F43F5E', color: '#fff' }
+                  <div key={key} className={cn('border-b last:border-0', isExpanded && 'bg-muted/5')}>
+                    <div
+                      className={cn('flex items-center justify-between gap-3 px-4 py-3 cursor-pointer transition-colors', isExpanded ? '' : 'hover:bg-muted/20')}
+                      onClick={() => setExpandedNn(isExpanded ? null : key)}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isExpanded
+                          ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                          : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                         }
-                      >
-                        {passed ? 'PASS' : 'FAIL'}
-                      </Badge>
+                        {passed ? (
+                          <CheckCircle2 className="h-4 w-4 flex-shrink-0" style={{ color: '#0D9488' }} />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4 flex-shrink-0" style={{ color: '#F43F5E' }} />
+                        )}
+                        <span className="text-sm font-medium">{label}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {rate !== null && (
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {(rate * 100).toFixed(0)}% pass rate
+                          </span>
+                        )}
+                        <Badge
+                          className="text-xs"
+                          style={passed ? { backgroundColor: '#0D9488', color: '#fff' } : { backgroundColor: '#F43F5E', color: '#fff' }}
+                        >
+                          {passed ? 'PASS' : 'FAIL'}
+                        </Badge>
+                      </div>
                     </div>
+                    {isExpanded && (
+                      <div className="px-4 pb-3">
+                        {!examples ? (
+                          <p className="text-xs text-muted-foreground">Loading examples...</p>
+                        ) : failedExamples.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-2">All 36 examples passed all non-negotiables.</p>
+                        ) : (
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                              Examples with non-negotiable violations ({failedExamples.length} of 36)
+                            </p>
+                            <div className="grid gap-1">
+                              {failedExamples.map((ex) => (
+                                <div key={ex.id} className="flex items-start gap-3 py-1.5 border-b border-border/40 last:border-0">
+                                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" style={{ color: '#F43F5E' }} />
+                                  <span className="text-xs bg-muted px-1.5 py-0.5 rounded flex-shrink-0">{ex.ticket_type}</span>
+                                  <span className="text-xs text-muted-foreground leading-relaxed">{ex.customer_message_truncated}</span>
+                                  <span className="font-mono text-xs text-muted-foreground flex-shrink-0">
+                                    overall: {(ex.overall_score * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}

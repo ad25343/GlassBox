@@ -209,6 +209,22 @@ export async function submitTicket(req: SubmitTicketRequest): Promise<RunRespons
   })
 }
 
+// Per-example result for a snapshot run
+export interface SnapshotExampleItem {
+  id: number
+  snapshot_id: number
+  corpus_example_id: string
+  ticket_type: string
+  customer_message_truncated: string
+  overall_score: number
+  property_scores: Record<string, number>
+  non_negotiables_passed: boolean
+}
+
+export async function getSnapshotExamples(snapshotId: number): Promise<SnapshotExampleItem[]> {
+  return apiFetch<SnapshotExampleItem[]>(`/api/v1/runs/snapshots/${snapshotId}/examples`)
+}
+
 // Get all snapshots (drift history)
 export async function getSnapshots(runType?: 'test' | 'baseline' | 'compare'): Promise<SnapshotResponse[]> {
   const qs = runType ? `?run_type=${runType}` : ''
