@@ -29,6 +29,9 @@ class SnapshotResult(BaseModel):
     overall_conformance: float
     property_scores: dict[str, float]
     non_negotiable_results: dict[str, Any]
+    category_scores: dict[str, dict[str, float]] = {}
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class DriftDelta(BaseModel):
@@ -117,6 +120,7 @@ class DriftEngine:
         logger.info("seeding synthetic history", days=len(_SYNTHETIC_DAYS))
         base_date = datetime.utcnow() - timedelta(days=14)
 
+        ticket_types = ["order_status", "refund_request", "billing_dispute", "escalation"]
         for day_offset, overall, issue_ack, resolution, tone, concise in _SYNTHETIC_DAYS:
             snapshot_date = (base_date + timedelta(days=day_offset)).isoformat()
             property_scores = {
@@ -126,6 +130,13 @@ class DriftEngine:
                 "concise_response": _jitter(concise),
             }
             overall_jittered = _jitter(overall)
+            category_scores: dict[str, dict[str, float]] = {
+                tt: {
+                    prop: round(min(1.0, max(0.0, score + random.uniform(-0.02, 0.02))), 4)
+                    for prop, score in property_scores.items()
+                }
+                for tt in ticket_types
+            }
 
             db.insert_snapshot(
                 model=self._config.PRODUCTION_MODEL,
@@ -135,11 +146,12 @@ class DriftEngine:
                 property_scores=property_scores,
                 non_negotiable_results={},
                 created_at=snapshot_date,
+                category_scores=category_scores,
             )
 
         logger.info("synthetic history seeded")
 
-    async def run_test_suite(self, model: str) -> SnapshotResult:
+    async def run_test_suite(self, model: str, run_type: str = "baseline") -> SnapshotResult:
         """Run the full corpus through the runtime and store a snapshot."""
         runtime = self._get_runtime()
         corpus = _load_corpus()
@@ -147,12 +159,20 @@ class DriftEngine:
 
         logger.info("starting test suite", model=model, corpus_size=len(corpus))
 
+        TICKET_TYPES = ["order_status", "refund_request", "billing_dispute", "escalation"]
         all_behavioral: dict[str, list[float]] = {
             bp["id"]: [] for bp in spec.get("behavioral_properties", [])
+        }
+        all_behavioral_by_category: dict[str, dict[str, list[float]]] = {
+            tt: {bp["id"]: [] for bp in spec.get("behavioral_properties", [])}
+            for tt in TICKET_TYPES
         }
         all_non_neg: dict[str, list[bool]] = {
             nn["id"]: [] for nn in spec.get("non_negotiables", [])
         }
+        total_input_tokens = 0
+        total_output_tokens = 0
+        pending_examples: list[dict[str, Any]] = []
 
         for example in corpus:
             try:
@@ -161,13 +181,34 @@ class DriftEngine:
                     ticket_type=example["ticket_type"],
                     context=example.get("context", {}),
                     model=model,
+                    use_tools=False,  # corpus has pre-filled context; no DB tool calls needed
                 )
+                total_input_tokens += result.input_tokens
+                total_output_tokens += result.output_tokens
                 for prop_id, score_obj in result.verdict.behavioral_scores.items():
                     if prop_id in all_behavioral:
                         all_behavioral[prop_id].append(score_obj.score)
                 for prop_id, nn_result in result.verdict.non_negotiable_results.items():
                     if prop_id in all_non_neg:
                         all_non_neg[prop_id].append(nn_result.passed)
+                cat = example.get("ticket_type")
+                if cat in all_behavioral_by_category:
+                    for prop_id, score_obj in result.verdict.behavioral_scores.items():
+                        if prop_id in all_behavioral_by_category[cat]:
+                            all_behavioral_by_category[cat][prop_id].append(score_obj.score)
+                # Collect per-example result for transparency log
+                pending_examples.append({
+                    "corpus_example_id": example.get("id", ""),
+                    "ticket_type": example.get("ticket_type", ""),
+                    "customer_message": example.get("customer_message", ""),
+                    "overall_score": result.verdict.overall_conformance,
+                    "property_scores": {
+                        pid: s.score for pid, s in result.verdict.behavioral_scores.items()
+                    },
+                    "non_negotiables_passed": all(
+                        r.passed for r in result.verdict.non_negotiable_results.values()
+                    ),
+                })
             except Exception as exc:  # noqa: BLE001 — catch-all for corpus iteration
                 logger.error(
                     "error processing corpus example",
@@ -188,6 +229,13 @@ class DriftEngine:
             pass_rate = sum(results) / len(results) if results else 1.0
             non_neg_summary[prop_id] = {"pass_rate": round(pass_rate, 4), "total": len(results)}
 
+        category_scores: dict[str, dict[str, float]] = {}
+        for cat, prop_map in all_behavioral_by_category.items():
+            category_scores[cat] = {
+                prop_id: round(sum(scores) / len(scores), 4) if scores else 0.0
+                for prop_id, scores in prop_map.items()
+            }
+
         snapshot_id = db.insert_snapshot(
             model=model,
             prompt_version=PROMPT_VERSION,
@@ -195,13 +243,32 @@ class DriftEngine:
             overall_conformance=round(overall, 4),
             property_scores=property_scores,
             non_negotiable_results=non_neg_summary,
+            category_scores=category_scores,
+            input_tokens=total_input_tokens,
+            output_tokens=total_output_tokens,
+            run_type=run_type,
         )
+
+        # Store per-example results now that snapshot_id is known
+        for ex in pending_examples:
+            db.insert_snapshot_example(
+                snapshot_id=snapshot_id,
+                corpus_example_id=ex["corpus_example_id"],
+                ticket_type=ex["ticket_type"],
+                customer_message=ex["customer_message"],
+                overall_score=ex["overall_score"],
+                property_scores=ex["property_scores"],
+                non_negotiables_passed=ex["non_negotiables_passed"],
+            )
+        logger.info("stored per-example results", snapshot_id=snapshot_id, count=len(pending_examples))
 
         logger.info(
             "test suite complete",
             snapshot_id=snapshot_id,
             model=model,
             overall_conformance=round(overall, 4),
+            input_tokens=total_input_tokens,
+            output_tokens=total_output_tokens,
         )
 
         return SnapshotResult(
@@ -213,10 +280,13 @@ class DriftEngine:
             overall_conformance=round(overall, 4),
             property_scores=property_scores,
             non_negotiable_results=non_neg_summary,
+            category_scores=category_scores,
+            input_tokens=total_input_tokens,
+            output_tokens=total_output_tokens,
         )
 
     def get_history(self) -> list[SnapshotResult]:
-        rows = db.get_snapshots()
+        rows = db.get_snapshots(run_type="baseline")
         return [
             SnapshotResult(
                 id=row["id"],
@@ -227,9 +297,78 @@ class DriftEngine:
                 overall_conformance=row["overall_conformance"],
                 property_scores=row["property_scores"],
                 non_negotiable_results=row["non_negotiable_results"],
+                category_scores=row.get("category_scores", {}),
+                input_tokens=row.get("input_tokens", 0),
+                output_tokens=row.get("output_tokens", 0),
             )
             for row in rows
         ]
+
+def compute_example_diff(
+    previous: dict[str, dict],
+    current: dict[str, dict],
+) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+    """Compare two snapshots' per-example results and classify each changed scenario.
+
+    Returns four lists: newly_failed, newly_recovered, degraded, improved.
+    Each entry is a dict matching the ExampleDiffEntry schema.
+    """
+    newly_failed: list[dict] = []
+    newly_recovered: list[dict] = []
+    degraded: list[dict] = []
+    improved: list[dict] = []
+
+    for ex_id in set(previous) & set(current):
+        prev = previous[ex_id]
+        curr = current[ex_id]
+        score_delta = round(curr["overall_score"] - prev["overall_score"], 4)
+        prev_passed = prev["non_negotiables_passed"]
+        curr_passed = curr["non_negotiables_passed"]
+
+        all_props = set(prev["property_scores"]) | set(curr["property_scores"])
+        changed_props = {
+            pid: round(curr["property_scores"].get(pid, 0) - prev["property_scores"].get(pid, 0), 4)
+            for pid in all_props
+            if abs(curr["property_scores"].get(pid, 0) - prev["property_scores"].get(pid, 0)) >= 0.05
+        }
+
+        if not prev_passed and not curr_passed and abs(score_delta) < 0.05:
+            continue  # persistently failing, no meaningful change
+        if prev_passed and curr_passed and abs(score_delta) < 0.05:
+            continue  # stable
+
+        if not prev_passed and curr_passed:
+            status = "newly_recovered"
+        elif prev_passed and not curr_passed:
+            status = "newly_failed"
+        elif score_delta <= -0.05:
+            status = "degraded"
+        elif score_delta >= 0.05:
+            status = "improved"
+        else:
+            continue
+
+        entry = {
+            "corpus_example_id": ex_id,
+            "ticket_type": curr["ticket_type"],
+            "customer_message_truncated": curr["customer_message_truncated"],
+            "previous_overall_score": round(prev["overall_score"], 4),
+            "current_overall_score": round(curr["overall_score"], 4),
+            "score_delta": score_delta,
+            "status": status,
+            "changed_properties": changed_props,
+        }
+        if status == "newly_failed":
+            newly_failed.append(entry)
+        elif status == "newly_recovered":
+            newly_recovered.append(entry)
+        elif status == "degraded":
+            degraded.append(entry)
+        else:
+            improved.append(entry)
+
+    return newly_failed, newly_recovered, degraded, improved
+
 
     def compute_deltas(self, snapshots: list[SnapshotResult]) -> list[DriftDelta]:
         if len(snapshots) < 2:

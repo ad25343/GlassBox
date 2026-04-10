@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   Home,
   MessageSquare,
@@ -6,21 +6,26 @@ import {
   TrendingUp,
   Scale,
   Activity,
+  ShieldCheck,
+  ScrollText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/lib/ThemeToggle'
 
 const nav = [
-  { to: '/', icon: Home, label: 'Home' },
-  { to: '/runtime', icon: MessageSquare, label: 'Live Runtime' },
-  { to: '/test-suite', icon: FlaskConical, label: 'Test Suite' },
-  { to: '/drift', icon: TrendingUp, label: 'Baseline & Drift' },
-  { to: '/compare', icon: Scale, label: 'Model Comparison' },
-  { to: '/monitor', icon: Activity, label: 'Production Monitor' },
+  { to: '/',           icon: Home,          label: 'Home' },
+  { to: '/spec',       icon: ShieldCheck,   label: 'Behavioral Spec' },
+  { to: '/runtime',    icon: MessageSquare, label: 'Live Runtime' },
+  { to: '/test-suite', icon: FlaskConical,  label: 'Test Suite' },
+  { to: '/drift',      icon: TrendingUp,    label: 'Baseline & Drift' },
+  { to: '/compare',    icon: Scale,         label: 'Model Comparison' },
+  { to: '/monitor',    icon: Activity,      label: 'Production Monitor' },
+  { to: '/chatlogs',   icon: ScrollText,    label: 'Chat Log Analytics' },
 ]
 
 export default function Layout() {
   const location = useLocation()
+  const navigate = useNavigate()
   const isHome = location.pathname === '/'
 
   if (isHome) {
@@ -33,7 +38,10 @@ export default function Layout() {
       <aside className="w-56 shrink-0 border-r border-border flex flex-col">
         {/* Logo row */}
         <div className="h-14 flex items-center justify-between px-4 border-b border-border">
-          <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          >
             <span className="font-bold tracking-tight text-foreground">Glass Box</span>
             <span
               className="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider text-white"
@@ -41,7 +49,7 @@ export default function Layout() {
             >
               BETA
             </span>
-          </div>
+          </button>
         </div>
 
         {/* Nav links */}
@@ -66,7 +74,7 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* Theme toggle — bottom of sidebar, full width pill */}
+        {/* Theme toggle */}
         <div className="p-3 border-t border-border">
           <ThemeToggle variant="pill" className="w-full justify-center" />
         </div>

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { InfoTooltip, ScoreTooltip, PROPERTY_DESCRIPTIONS } from '@/components/ui/score-tooltip'
 import { cn } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getSnapshots, triggerSnapshot, type SnapshotResponse } from '@/lib/api'
@@ -66,14 +67,14 @@ export default function TestSuitePage() {
 
   const { data: snapshots, isLoading: snapshotsLoading } = useQuery({
     queryKey: ['snapshots'],
-    queryFn: getSnapshots,
+    queryFn: () => getSnapshots('test'),
   })
 
   const snapshot: SnapshotResponse | null =
     snapshots && snapshots.length > 0 ? snapshots[snapshots.length - 1] : null
 
   const runMutation = useMutation({
-    mutationFn: () => triggerSnapshot(selectedModel),
+    mutationFn: () => triggerSnapshot(selectedModel, 'test'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['snapshots'] })
     },
@@ -97,7 +98,7 @@ export default function TestSuitePage() {
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
-            className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2"
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 hover:border-foreground/30 hover:bg-muted/30 transition-colors cursor-pointer"
           >
             <option value="claude-sonnet-4-5">claude-sonnet-4-5</option>
             <option value="claude-haiku-4-5">claude-haiku-4-5</option>
@@ -165,7 +166,10 @@ export default function TestSuitePage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-1">
-                <CardTitle className="text-xs font-medium text-muted-foreground">Overall Conformance</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground flex items-center">
+                  Overall Conformance
+                  <InfoTooltip text="Weighted average score across all 4 behavioral properties, across all 36 test cases. The primary health signal for this model on this spec." side="top" />
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold" style={{ color: scoreColor(snapshot.overall_conformance, 0.9, 0.8) }}>
@@ -176,7 +180,10 @@ export default function TestSuitePage() {
             </Card>
             <Card>
               <CardHeader className="pb-1">
-                <CardTitle className="text-xs font-medium text-muted-foreground">Non-Negotiables</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground flex items-center">
+                  Non-Negotiables
+                  <InfoTooltip text="Hard rules that must never be broken — e.g. never promise a refund without checking eligibility. These are binary pass/fail. A single failure is a critical incident, not a score." side="top" />
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold" style={{ color: '#0D9488' }}>
@@ -187,7 +194,10 @@ export default function TestSuitePage() {
             </Card>
             <Card>
               <CardHeader className="pb-1">
-                <CardTitle className="text-xs font-medium text-muted-foreground">Tests Run</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground flex items-center">
+                  Tests Run
+                  <InfoTooltip text="36 labeled customer support scenarios drawn from corpus.json — 9 per ticket type (Order Status, Refund, Billing, Escalation). Each is run once and graded by an independent judge model." side="top" />
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold">36</p>
@@ -263,21 +273,28 @@ export default function TestSuitePage() {
                     return (
                       <tr
                         key={prop.id}
-                        className={cn('border-b last:border-0', i % 2 === 0 ? '' : 'bg-muted/30')}
+                        className={cn('border-b last:border-0 hover:bg-muted/20 transition-colors', i % 2 === 0 ? '' : 'bg-muted/30')}
                       >
-                        <td className="px-4 py-3 font-medium">{prop.displayName}</td>
+                        <td className="px-4 py-3 font-medium">
+                          <span className="flex items-center">
+                            {prop.displayName}
+                            <InfoTooltip text={PROPERTY_DESCRIPTIONS[prop.id] ?? prop.displayName} />
+                          </span>
+                        </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
-                              <div
-                                className="h-full rounded-full"
-                                style={{ width: `${score * 100}%`, backgroundColor: color }}
-                              />
+                          <ScoreTooltip value={score} target={prop.target} alertThreshold={prop.alertThreshold}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{ width: `${score * 100}%`, backgroundColor: color }}
+                                />
+                              </div>
+                              <span className="font-mono text-xs font-medium" style={{ color }}>
+                                {(score * 100).toFixed(1)}%
+                              </span>
                             </div>
-                            <span className="font-mono text-xs font-medium" style={{ color }}>
-                              {(score * 100).toFixed(1)}%
-                            </span>
-                          </div>
+                          </ScoreTooltip>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
                           &gt;{(prop.target * 100).toFixed(0)}%
@@ -304,7 +321,10 @@ export default function TestSuitePage() {
         {snapshot && Object.keys(snapshot.non_negotiable_results).length > 0 && (
           <Card>
             <CardHeader className="border-b pb-3">
-              <CardTitle className="text-sm font-medium">Non-Negotiables</CardTitle>
+              <CardTitle className="text-sm font-medium flex items-center">
+              Non-Negotiables
+              <InfoTooltip text="Binary rules with zero tolerance. The runtime enforces these in the system prompt and retries once if the judge flags a violation. Failures here are critical — they indicate the model broke a hard policy constraint." />
+            </CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-2">
               {Object.entries(snapshot.non_negotiable_results).map(([key, result], i) => {

@@ -1,24 +1,50 @@
 import { useState } from 'react'
-import { Play, TrendingUp, TrendingDown, Minus, Loader2, Terminal } from 'lucide-react'
+import { Play, TrendingUp, TrendingDown, Minus, Loader2, Terminal, History, ChevronDown, ChevronRight, Trash2, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { InfoTooltip, ScoreTooltip } from '@/components/ui/score-tooltip'
 import { cn } from '@/lib/utils'
-import { useMutation } from '@tanstack/react-query'
-import { compareModels, type CompareResponse, type ModelCompareResult } from '@/lib/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { compareModels, getSnapshots, deleteSnapshot, type CompareResponse, type SnapshotResponse } from '@/lib/api'
 
 interface PropertyConfig {
   id: string
   displayName: string
+  description: string
   target: number
   alertThreshold: number
 }
 
 const PROPERTY_CONFIGS: PropertyConfig[] = [
-  { id: 'issue_acknowledged', displayName: 'Issue Acknowledged', target: 0.95, alertThreshold: 0.85 },
-  { id: 'resolution_matching', displayName: 'Resolution Matching', target: 0.90, alertThreshold: 0.80 },
-  { id: 'professional_tone', displayName: 'Professional Tone', target: 0.90, alertThreshold: 0.80 },
-  { id: 'concise_response', displayName: 'Concise Response', target: 0.85, alertThreshold: 0.75 },
+  {
+    id: 'issue_acknowledged',
+    displayName: 'Issue Acknowledged',
+    description: 'Did the model explicitly acknowledge the customer\'s issue before jumping to a resolution? A score of 95% means 34 of 36 test cases passed. Target ≥ 95%, alert below 85%.',
+    target: 0.95,
+    alertThreshold: 0.85,
+  },
+  {
+    id: 'resolution_matching',
+    displayName: 'Resolution Matching',
+    description: 'Did the proposed resolution match the recommended path for this ticket type — correct policy, correct action, no hallucinated steps? Target ≥ 90%, alert below 80%.',
+    target: 0.90,
+    alertThreshold: 0.80,
+  },
+  {
+    id: 'professional_tone',
+    displayName: 'Professional Tone',
+    description: 'Was the response professional and empathetic throughout — not robotic, not dismissive, not overly casual? Target ≥ 90%, alert below 80%.',
+    target: 0.90,
+    alertThreshold: 0.80,
+  },
+  {
+    id: 'concise_response',
+    displayName: 'Concise Response',
+    description: 'Was the response appropriately brief — no filler phrases, unnecessary repetition, or over-explanation? Verbosity is a real cost in production. Target ≥ 85%, alert below 75%.',
+    target: 0.85,
+    alertThreshold: 0.75,
+  },
 ]
 
 function scoreColor(score: number, target: number, alertThreshold: number): string {
@@ -66,6 +92,7 @@ function ScoreBar({ value, color }: { value: number; color: string }) {
   )
 }
 
+
 function modelShortName(model: string): string {
   if (model.includes('sonnet')) return 'Sonnet'
   if (model.includes('haiku')) return 'Haiku'
@@ -75,21 +102,250 @@ function modelShortName(model: string): string {
 
 const MODEL_COLORS = ['#0D9488', '#3B82F6', '#8B5CF6', '#F59E0B']
 
-export default function ComparePage() {
-  const [compareResult, setCompareResult] = useState<CompareResponse | null>(null)
-  const [showInternals, setShowInternals] = useState(false)
+const PROP_LABELS: Record<string, string> = {
+  issue_acknowledged: 'Issue Acknowledged',
+  resolution_matching: 'Resolution Matching',
+  professional_tone: 'Professional Tone',
+  concise_response: 'Concise Response',
+}
 
-  const runMutation = useMutation({
-    mutationFn: () => compareModels(),
-    onSuccess: (data) => {
-      setCompareResult(data)
-    },
+interface NarrativeSection {
+  heading: string
+  body: string
+}
+
+function buildSummary(result: CompareResponse): string {
+  if (result.models.length < 2) return ''
+  const [m1, m2] = result.models
+  const n1 = modelShortName(m1.model)
+  const n2 = modelShortName(m2.model)
+  const o1 = m1.overall_conformance
+  const o2 = m2.overall_conformance
+  const winner = o1 >= o2 ? n1 : n2
+  const loser = o1 >= o2 ? n2 : n1
+  const winnerM = o1 >= o2 ? m1 : m2
+  const loserM = o1 >= o2 ? m2 : m1
+  const delta = Math.abs(o1 - o2) * 100
+  const score = (m: typeof m1, p: string) => (m.property_scores[p] ?? 0) * 100
+  const gap = (p: string) => score(winnerM, p) - score(loserM, p)
+  const biggestProp = Object.keys(PROP_LABELS).sort((a, b) => Math.abs(gap(b)) - Math.abs(gap(a)))[0]
+
+  let summary = `${winner} leads by ${delta.toFixed(1)}pp overall (${(winnerM.overall_conformance * 100).toFixed(1)}% vs ${(loserM.overall_conformance * 100).toFixed(1)}%), with the sharpest gap in ${PROP_LABELS[biggestProp]} (${score(winnerM, biggestProp).toFixed(1)}% vs ${score(loserM, biggestProp).toFixed(1)}%). `
+
+  if (delta < 2) {
+    summary += `The models are behaviorally near-identical — the decision should be driven by cost. ${n2} is significantly cheaper per call.`
+  } else if (delta < 6) {
+    summary += `${winner} is the stronger performer, but ${loser} remains viable for lower-stakes ticket types where the cost difference outweighs the behavioural gap.`
+  } else {
+    summary += `The gap is significant enough that ${winner} is the clear production choice where accuracy matters.`
+  }
+  return summary
+}
+
+function buildNarrativeSections(result: CompareResponse): NarrativeSection[] {
+  if (result.models.length < 2) return []
+  const [m1, m2] = result.models
+  const n1 = modelShortName(m1.model)
+  const n2 = modelShortName(m2.model)
+  const o1 = m1.overall_conformance
+  const o2 = m2.overall_conformance
+  const winner = o1 >= o2 ? n1 : n2
+  const loser = o1 >= o2 ? n2 : n1
+  const winnerM = o1 >= o2 ? m1 : m2
+  const loserM = o1 >= o2 ? m2 : m1
+  const delta = Math.abs(o1 - o2) * 100
+
+  const score = (m: typeof m1, p: string) => (m.property_scores[p] ?? 0) * 100
+  const gap = (p: string) => score(winnerM, p) - score(loserM, p)
+
+  const sections: NarrativeSection[] = []
+
+  // Issue Acknowledged
+  const iaGap = gap('issue_acknowledged')
+  const ia1 = score(winnerM, 'issue_acknowledged')
+  const ia2 = score(loserM, 'issue_acknowledged')
+  sections.push({
+    heading: 'Issue Acknowledged',
+    body: Math.abs(iaGap) < 2
+      ? `Both models score similarly here (${n1}: ${score(m1, 'issue_acknowledged').toFixed(1)}%, ${n2}: ${score(m2, 'issue_acknowledged').toFixed(1)}%). Empathy and acknowledgement are consistent across both — neither model skips past the customer's concern to jump straight to resolution.`
+      : `${winner} scores ${ia1.toFixed(1)}% vs ${loser}'s ${ia2.toFixed(1)}% (${Math.abs(iaGap).toFixed(1)}pp gap). This measures whether the model opens by acknowledging the customer's issue before offering a solution. A lower score means the model is more likely to skip straight to resolution without first validating the customer's concern.`,
   })
 
-  const isRunning = runMutation.isPending
+  // Resolution Matching
+  const rmGap = gap('resolution_matching')
+  const rm1 = score(winnerM, 'resolution_matching')
+  const rm2 = score(loserM, 'resolution_matching')
+  sections.push({
+    heading: 'Resolution Matching',
+    body: Math.abs(rmGap) < 2
+      ? `Both models follow the resolution path consistently (${n1}: ${score(m1, 'resolution_matching').toFixed(1)}%, ${n2}: ${score(m2, 'resolution_matching').toFixed(1)}%). Tool call sequencing — lookup, eligibility check, label generation — is reliably followed by both.`
+      : `This is the widest gap in the comparison: ${winner} at ${rm1.toFixed(1)}% vs ${loser} at ${rm2.toFixed(1)}% (${Math.abs(rmGap).toFixed(1)}pp). Resolution Matching measures whether the model calls tools in the correct sequence — for example, checking return eligibility before mentioning a refund. A lower score means the model is more likely to skip steps or answer out of order, which can lead to incorrect or premature commitments to customers.`,
+  })
 
-  const model1: ModelCompareResult | null = compareResult?.models[0] ?? null
-  const model2: ModelCompareResult | null = compareResult?.models[1] ?? null
+  // Professional Tone
+  const ptGap = gap('professional_tone')
+  const pt1 = score(winnerM, 'professional_tone')
+  const pt2 = score(loserM, 'professional_tone')
+  sections.push({
+    heading: 'Professional Tone',
+    body: Math.abs(ptGap) < 2
+      ? `Tone is consistent across both models (${n1}: ${score(m1, 'professional_tone').toFixed(1)}%, ${n2}: ${score(m2, 'professional_tone').toFixed(1)}%). Both maintain appropriate customer service language without being overly formal or too casual.`
+      : `${winner} scores ${pt1.toFixed(1)}% vs ${loser}'s ${pt2.toFixed(1)}% (${Math.abs(ptGap).toFixed(1)}pp). Professional Tone captures whether the response maintains appropriate register — empathetic but not sycophantic, direct but not curt. The gap here suggests ${loser} has more variance in how it handles frustrated or edge-case customers.`,
+  })
+
+  // Concise Response
+  const crGap = gap('concise_response')
+  const cr1 = score(winnerM, 'concise_response')
+  const cr2 = score(loserM, 'concise_response')
+  sections.push({
+    heading: 'Concise Response',
+    body: Math.abs(crGap) < 2
+      ? `Both models produce similarly concise responses (${n1}: ${score(m1, 'concise_response').toFixed(1)}%, ${n2}: ${score(m2, 'concise_response').toFixed(1)}%). Neither tends to pad responses or repeat information already provided.`
+      : `${winner} scores ${cr1.toFixed(1)}% vs ${loser}'s ${cr2.toFixed(1)}% (${Math.abs(crGap).toFixed(1)}pp). This measures whether the model stays focused — addressing the issue without unnecessary repetition or filler. A lower score typically means longer, padded responses that reduce the quality of the customer experience.`,
+  })
+
+  return sections
+}
+
+interface ComparePair {
+  runAt: string
+  sonnet: SnapshotResponse
+  haiku: SnapshotResponse
+}
+
+function pairSnapshots(snapshots: SnapshotResponse[]): ComparePair[] {
+  // Only real runs have haiku entries — synthetic history is sonnet-only
+  const haikus = snapshots.filter(s => s.model.includes('haiku'))
+  const sonnets = snapshots.filter(s => s.model.includes('sonnet'))
+  const pairs: ComparePair[] = []
+  for (const haiku of haikus) {
+    const haikusMs = new Date(haiku.created_at).getTime()
+    // Find the closest sonnet run within 120 seconds
+    const match = sonnets.find(s => Math.abs(new Date(s.created_at).getTime() - haikusMs) < 120_000)
+    if (match) pairs.push({ runAt: haiku.created_at, sonnet: match, haiku })
+  }
+  return pairs.sort((a, b) => new Date(b.runAt).getTime() - new Date(a.runAt).getTime())
+}
+
+const PRICING: Record<string, { input: number; output: number }> = {
+  'claude-sonnet-4-5': { input: 3.0, output: 15.0 },
+  'claude-haiku-4-5': { input: 0.25, output: 1.25 },
+}
+
+function computeCost(model: string, inputTokens: number, outputTokens: number) {
+  const p = PRICING[model] ?? { input: 0.25, output: 1.25 }
+  const cost = (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output
+  return {
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    total_tokens: inputTokens + outputTokens,
+    estimated_cost_usd: Math.round(cost * 1_000_000) / 1_000_000,
+  }
+}
+
+function compareResponseFromPair(pair: ComparePair): CompareResponse {
+  const toModelResult = (s: SnapshotResponse) => ({
+    model: s.model,
+    overall_conformance: s.overall_conformance,
+    property_scores: s.property_scores,
+    non_negotiable_pass_rates: {},
+    cost_estimate: computeCost(s.model, s.input_tokens, s.output_tokens),
+    snapshot: s,
+  })
+  const models = [toModelResult(pair.sonnet), toModelResult(pair.haiku)]
+  const winner = pair.sonnet.overall_conformance >= pair.haiku.overall_conformance
+    ? pair.sonnet.model : pair.haiku.model
+  return { models, winner, winner_reason: null }
+}
+
+function NarrativePanel({ summary, sections, result }: { summary: string; sections: NarrativeSection[]; result: CompareResponse }) {
+  const [open, setOpen] = useState(false)
+  const runAt = result.models[0]?.snapshot?.created_at
+  const models = result.models.map(m => modelShortName(m.model)).join(' vs ')
+  const snapshotIds = result.models
+    .map(m => m.snapshot?.id)
+    .filter((id): id is number => id != null)
+  const runId = snapshotIds.length > 0 ? snapshotIds.map(id => `#${id}`).join(' · ') : null
+  return (
+    <div className="rounded-lg border">
+      {/* Summary — always visible */}
+      <div className="px-5 py-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Summary</p>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
+            {runId && <span className="opacity-50">{runId}</span>}
+            <span>{models}</span>
+            {runAt && <span>{new Date(runAt).toLocaleString()}</span>}
+          </div>
+        </div>
+        <p className="text-sm leading-relaxed">{summary}</p>
+      </div>
+      {/* Analysis — collapsible */}
+      <div className="border-t">
+        <button
+          className="w-full flex items-center justify-between px-5 py-3 text-sm font-semibold hover:bg-muted/40 transition-colors"
+          onClick={() => setOpen(v => !v)}
+        >
+          <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">Analysis</span>
+          {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        </button>
+        {open && (
+          <div className="border-t px-5 py-4 space-y-4">
+            {sections.map(s => (
+              <div key={s.heading}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">{s.heading}</p>
+                <p className="text-sm leading-relaxed text-foreground">{s.body}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function ComparePage() {
+  const [showInternals, setShowInternals] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  const queryClient = useQueryClient()
+
+  const [isRunning, setIsRunning] = useState(false)
+  const [runError, setRunError] = useState<string | null>(null)
+  const [compareResult, setCompareResult] = useState<CompareResponse | null>(null)
+
+  const handleRun = async () => {
+    setIsRunning(true)
+    setRunError(null)
+    try {
+      const data = await compareModels()
+      setCompareResult(data)
+      queryClient.invalidateQueries({ queryKey: ['snapshots'] })
+    } catch (e) {
+      setRunError(e instanceof Error ? e.message : 'Unknown error — check server logs.')
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
+  const deleteMutation = useMutation({
+    mutationFn: async (pair: ComparePair) => {
+      await Promise.all([
+        pair.sonnet.id != null ? deleteSnapshot(pair.sonnet.id) : Promise.resolve(),
+        pair.haiku.id != null ? deleteSnapshot(pair.haiku.id) : Promise.resolve(),
+      ])
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['snapshots'] }),
+  })
+
+  const snapshotsQuery = useQuery({
+    queryKey: ['snapshots'],
+    queryFn: () => getSnapshots('compare'),
+    staleTime: 30_000,
+  })
+  const comparePairs = snapshotsQuery.data ? pairSnapshots(snapshotsQuery.data) : []
+  const latestPairResult = comparePairs.length > 0 ? compareResponseFromPair(comparePairs[0]) : null
+
+  const displayResult: CompareResponse | null = compareResult
 
   return (
     <div className="flex flex-col h-full">
@@ -105,7 +361,7 @@ export default function ComparePage() {
           <Button
             className="text-white"
             style={{ backgroundColor: '#0D9488' }}
-            onClick={() => runMutation.mutate()}
+            onClick={handleRun}
             disabled={isRunning}
           >
             {isRunning ? (
@@ -140,17 +396,41 @@ export default function ComparePage() {
           </div>
         )}
 
-        {!compareResult && !isRunning && (
-          <div className="rounded-lg border border-dashed p-12 text-center text-sm text-muted-foreground">
-            Click Run Comparison to compare Claude Sonnet vs Claude Haiku on identical behavioral criteria.
+        {runError !== null && (
+          <div className="rounded-lg border p-4 text-sm" style={{ borderColor: '#F43F5E', backgroundColor: '#F43F5E11' }}>
+            <p className="font-semibold mb-1" style={{ color: '#F43F5E' }}>Comparison failed</p>
+            <p className="text-muted-foreground font-mono text-xs">
+              {runError ?? 'Unknown error — check server logs.'}
+            </p>
           </div>
         )}
 
-        {compareResult && model1 && model2 && (
+        {displayResult && (
           <>
+            {/* Results header with close button */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Results</p>
+              <button
+                className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                onClick={() => setCompareResult(null)}
+                title="Clear results"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Empty guard */}
+            {displayResult.models.length === 0 && (
+              <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                Comparison completed but returned no model results. Check server logs.
+              </div>
+            )}
+
+            {displayResult.models.length > 0 && (
+            <>
             {/* Model header row */}
-            <div className={`grid grid-cols-${compareResult.models.length} gap-4`} style={{ display: 'grid', gridTemplateColumns: `repeat(${compareResult.models.length}, minmax(0, 1fr))` }}>
-              {compareResult.models.map((m, i) => (
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${displayResult.models.length}, minmax(0, 1fr))` }} className="gap-4">
+              {displayResult.models.map((m, i) => (
                 <div
                   key={m.model}
                   className="flex items-center gap-2 rounded-lg border px-4 py-3"
@@ -164,19 +444,13 @@ export default function ComparePage() {
               ))}
             </div>
 
-            {/* Winner banner */}
-            {compareResult.winner && (
-              <div
-                className="rounded-lg border p-4"
-                style={{ borderColor: '#0D9488', backgroundColor: '#0D944811' }}
-              >
-                <p className="text-sm font-semibold" style={{ color: '#0D9488' }}>
-                  {compareResult.winner} wins overall
-                </p>
-                {compareResult.winner_reason && (
-                  <p className="text-sm text-muted-foreground mt-1">{compareResult.winner_reason}</p>
-                )}
-              </div>
+            {/* Narrative summary + collapsible analysis */}
+            {displayResult.models.length >= 2 && (
+              <NarrativePanel
+                summary={buildSummary(displayResult)}
+                sections={buildNarrativeSections(displayResult)}
+                result={displayResult}
+              />
             )}
 
             {/* Comparison table */}
@@ -191,7 +465,7 @@ export default function ComparePage() {
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                         Property
                       </th>
-                      {compareResult.models.map((m) => (
+                      {displayResult.models.map((m) => (
                         <th
                           key={m.model}
                           className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
@@ -199,87 +473,99 @@ export default function ComparePage() {
                           {modelShortName(m.model)}
                         </th>
                       ))}
-                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Delta
-                      </th>
-                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Winner
-                      </th>
+                      {displayResult.models.length >= 2 && (
+                        <>
+                          <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            Delta
+                            <InfoTooltip text="Score difference between Model B and Model A. Green = Model B leads, red = Model A leads." side="top" />
+                          </th>
+                          <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Winner</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {/* Property rows */}
                     {PROPERTY_CONFIGS.map((prop, i) => {
-                      const score1 = model1.property_scores[prop.id] ?? 0
-                      const score2 = model2.property_scores[prop.id] ?? 0
-                      const d = score2 - score1
+                      const scores = displayResult.models.map(m => m.property_scores[prop.id] ?? 0)
+                      const score0 = scores[0] ?? 0
+                      const score1 = scores[1] ?? 0
+                      const d = score1 - score0
+                      const winnerIdx = scores.indexOf(Math.max(...scores))
                       return (
                         <tr
                           key={prop.id}
                           className={cn('border-b last:border-0', i % 2 === 0 ? '' : 'bg-muted/20')}
                         >
-                          <td className="px-4 py-3 text-sm">{prop.displayName}</td>
-                          <td className="px-4 py-3">
-                            <ScoreBar
-                              value={score1}
-                              color={scoreColor(score1, prop.target, prop.alertThreshold)}
-                            />
+                          <td className="px-4 py-3 text-sm">
+                            <span className="flex items-center">
+                              {prop.displayName}
+                              <InfoTooltip text={prop.description} />
+                            </span>
                           </td>
-                          <td className="px-4 py-3">
-                            <ScoreBar
-                              value={score2}
-                              color={scoreColor(score2, prop.target, prop.alertThreshold)}
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            <DeltaCell d={d} />
-                          </td>
-                          <td className="px-4 py-3">
-                            {score1 > score2 ? (
-                              <span className="text-xs font-medium" style={{ color: '#0D9488' }}>
-                                {modelShortName(model1.model)} ✓
-                              </span>
-                            ) : score2 > score1 ? (
-                              <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>
-                                {modelShortName(model2.model)} ✓
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Tie</span>
-                            )}
-                          </td>
+                          {displayResult.models.map((m, mi) => (
+                            <td key={m.model} className="px-4 py-3">
+                              <ScoreTooltip value={scores[mi] ?? 0} target={prop.target} alertThreshold={prop.alertThreshold}>
+                                <ScoreBar
+                                  value={scores[mi] ?? 0}
+                                  color={scoreColor(scores[mi] ?? 0, prop.target, prop.alertThreshold)}
+                                />
+                              </ScoreTooltip>
+                            </td>
+                          ))}
+                          {displayResult.models.length >= 2 && (
+                            <>
+                              <td className="px-4 py-3"><DeltaCell d={d} /></td>
+                              <td className="px-4 py-3">
+                                {score0 === score1 ? (
+                                  <span className="text-xs text-muted-foreground">Tie</span>
+                                ) : (
+                                  <span className="text-xs font-medium" style={{ color: MODEL_COLORS[winnerIdx] ?? '#0D9488' }}>
+                                    {modelShortName(displayResult.models[winnerIdx].model)} ✓
+                                  </span>
+                                )}
+                              </td>
+                            </>
+                          )}
                         </tr>
                       )
                     })}
                     {/* Overall row */}
                     {(() => {
-                      const o1 = model1.overall_conformance
-                      const o2 = model2.overall_conformance
-                      const d = o2 - o1
+                      const overalls = displayResult.models.map(m => m.overall_conformance)
+                      const o0 = overalls[0] ?? 0
+                      const o1 = overalls[1] ?? 0
+                      const d = o1 - o0
+                      const winnerIdx = overalls.indexOf(Math.max(...overalls))
                       return (
                         <tr className="bg-muted/50 font-semibold border-t">
-                          <td className="px-4 py-3 text-sm">Overall</td>
-                          <td className="px-4 py-3">
-                            <ScoreBar value={o1} color={scoreColor(o1, 0.9, 0.8)} />
+                          <td className="px-4 py-3 text-sm">
+                            <span className="flex items-center">
+                              Overall
+                              <InfoTooltip text="Weighted average across all 4 behavioral properties. The primary signal for comparing models on this spec." side="right" />
+                            </span>
                           </td>
-                          <td className="px-4 py-3">
-                            <ScoreBar value={o2} color={scoreColor(o2, 0.9, 0.8)} />
-                          </td>
-                          <td className="px-4 py-3">
-                            <DeltaCell d={d} />
-                          </td>
-                          <td className="px-4 py-3">
-                            {o1 > o2 ? (
-                              <span className="text-xs font-medium" style={{ color: '#0D9488' }}>
-                                {modelShortName(model1.model)} ✓
-                              </span>
-                            ) : o2 > o1 ? (
-                              <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>
-                                {modelShortName(model2.model)} ✓
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Tie</span>
-                            )}
-                          </td>
+                          {displayResult.models.map((m, mi) => (
+                            <td key={m.model} className="px-4 py-3">
+                              <ScoreTooltip value={overalls[mi] ?? 0} target={0.9} alertThreshold={0.8}>
+                                <ScoreBar value={overalls[mi] ?? 0} color={scoreColor(overalls[mi] ?? 0, 0.9, 0.8)} />
+                              </ScoreTooltip>
+                            </td>
+                          ))}
+                          {displayResult.models.length >= 2 && (
+                            <>
+                              <td className="px-4 py-3"><DeltaCell d={d} /></td>
+                              <td className="px-4 py-3">
+                                {o0 === o1 ? (
+                                  <span className="text-xs text-muted-foreground">Tie</span>
+                                ) : (
+                                  <span className="text-xs font-medium" style={{ color: MODEL_COLORS[winnerIdx] ?? '#0D9488' }}>
+                                    {modelShortName(displayResult.models[winnerIdx].model)} ✓
+                                  </span>
+                                )}
+                              </td>
+                            </>
+                          )}
                         </tr>
                       )
                     })()}
@@ -288,67 +574,109 @@ export default function ComparePage() {
               </CardContent>
             </Card>
 
-            {/* Cost comparison */}
-            <div>
-              <h2 className="text-sm font-semibold mb-3">Cost Comparison</h2>
-              <div
-                style={{ display: 'grid', gridTemplateColumns: `repeat(${compareResult.models.length}, minmax(0, 1fr))` }}
-                className="gap-4"
-              >
-                {compareResult.models.map((m, i) => {
-                  const color = MODEL_COLORS[i] ?? '#0D9488'
-                  const costPer1K = (m.cost_estimate.estimated_cost_usd * 1000) / 36
+            {/* Cost comparison — only shown when real token data is available */}
+            {displayResult.models.some(m => m.cost_estimate.total_tokens > 0) && (
+              <div>
+                <h2 className="text-sm font-semibold mb-3">Cost Comparison <span className="text-xs font-normal text-muted-foreground">(model inference only, 36 examples)</span></h2>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${displayResult.models.length}, minmax(0, 1fr))` }} className="gap-4">
+                  {displayResult.models.map((m, i) => {
+                    const color = MODEL_COLORS[i] ?? '#0D9488'
+                    const c = m.cost_estimate
+                    const costPer1K = c.total_tokens > 0 ? (c.estimated_cost_usd / 36) * 1000 : null
+                    return (
+                      <Card key={m.model} style={{ borderColor: color }} className="border">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium flex items-center gap-2">
+                            <Badge style={{ backgroundColor: color, color: '#fff' }} className="text-xs">{modelShortName(m.model)}</Badge>
+                            <span className="font-mono text-xs">{m.model}</span>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Input / Output tokens</p>
+                            <p className="text-sm font-semibold mt-0.5 font-mono">
+                              {c.input_tokens.toLocaleString()} / {c.output_tokens.toLocaleString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Cost for 36 examples</p>
+                            <p className="text-2xl font-semibold mt-0.5">${c.estimated_cost_usd.toFixed(4)}</p>
+                          </div>
+                          {costPer1K != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Estimated cost per 1K calls</p>
+                              <p className="text-lg font-semibold mt-0.5">${costPer1K.toFixed(2)}</p>
+                            </div>
+                          )}
+                          <div className="text-xs text-muted-foreground border-t pt-2">
+                            {(m.overall_conformance * 100).toFixed(1)}% conformance rate
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            </>
+            )}
+          </>
+        )}
+
+        {/* Comparison History */}
+        {comparePairs.length > 0 && (
+          <div className="rounded-lg border">
+            <button
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold hover:bg-muted/40 transition-colors"
+              onClick={() => setShowHistory(v => !v)}
+            >
+              <span className="flex items-center gap-2">
+                <History className="h-4 w-4 text-muted-foreground" />
+                Comparison History
+                <Badge variant="outline" className="text-xs font-mono">{comparePairs.length}</Badge>
+              </span>
+              {showHistory ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+            </button>
+            {showHistory && (
+              <div className="border-t divide-y">
+                {comparePairs.map((pair, i) => {
+                  const sonnetScore = pair.sonnet.overall_conformance
+                  const haikuScore = pair.haiku.overall_conformance
+                  const winnerModel = sonnetScore >= haikuScore ? pair.sonnet.model : pair.haiku.model
+                  const delta = Math.abs(sonnetScore - haikuScore)
                   return (
-                    <Card key={m.model} style={{ borderColor: color }} className="border">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium flex items-center gap-2">
-                          <Badge style={{ backgroundColor: color, color: '#fff' }} className="text-xs">
-                            {modelShortName(m.model)}
+                    <div key={i} className="flex items-center group">
+                      <button
+                        className="flex-1 flex items-center justify-between px-4 py-3 text-sm hover:bg-muted/30 transition-colors text-left"
+                        onClick={() => setCompareResult(compareResponseFromPair(pair))}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-muted-foreground font-mono text-xs">
+                            {new Date(pair.runAt).toLocaleString()}
+                          </span>
+                          <Badge className="text-xs" style={{ backgroundColor: '#0D9488', color: '#fff' }}>
+                            {modelShortName(winnerModel)} wins
                           </Badge>
-                          <span className="font-mono text-xs">{m.model}</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Total tokens (36 examples)</p>
-                          <p className="text-lg font-semibold mt-0.5">
-                            {m.cost_estimate.total_tokens.toLocaleString()}
-                          </p>
                         </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Estimated cost (36 examples)</p>
-                          <p className="text-2xl font-semibold mt-0.5">
-                            ${m.cost_estimate.estimated_cost_usd.toFixed(4)}
-                          </p>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
+                          <span>Sonnet <span className="font-semibold text-foreground">{(sonnetScore * 100).toFixed(1)}%</span></span>
+                          <span>Haiku <span className="font-semibold text-foreground">{(haikuScore * 100).toFixed(1)}%</span></span>
+                          <span className="text-muted-foreground">Δ {(delta * 100).toFixed(1)}%</span>
                         </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Cost per 1K calls</p>
-                          <p className="text-lg font-semibold mt-0.5">
-                            ${costPer1K.toFixed(2)}
-                          </p>
-                        </div>
-                        <div className="text-xs text-muted-foreground border-t pt-2">
-                          {(m.overall_conformance * 100).toFixed(1)}% conformance rate
-                        </div>
-                      </CardContent>
-                    </Card>
+                      </button>
+                      <button
+                        className="px-3 py-3 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                        title="Delete this comparison run"
+                        onClick={() => deleteMutation.mutate(pair)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   )
                 })}
               </div>
-            </div>
-
-            {/* Value verdict */}
-            {compareResult.winner_reason && (
-              <Card className="border" style={{ borderColor: '#3B82F6', backgroundColor: '#3B82F611' }}>
-                <CardContent className="p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-                    Value Verdict
-                  </p>
-                  <p className="text-sm text-foreground leading-relaxed">{compareResult.winner_reason}</p>
-                </CardContent>
-              </Card>
             )}
-          </>
+          </div>
         )}
 
         {/* Internals panel */}

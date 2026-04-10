@@ -42,10 +42,26 @@ You are a strict quality-assurance judge for a customer support AI. Your job is 
 an AI-generated support response against a behavioral specification.
 
 You will receive:
-1. The customer message
-2. The ticket type and documented resolution path
-3. The AI's response
-4. The behavioral spec (non-negotiables and behavioral properties)
+1. The conversation history so far (prior turns, if any)
+2. The latest customer message
+3. The ticket type and documented resolution path
+4. The AI's response to the latest message
+5. The behavioral spec (non-negotiables and behavioral properties)
+
+IMPORTANT: Evaluate the AI's latest response in the context of the full conversation.
+If a resolution step (e.g. checking order status) was completed in a prior turn, the AI
+should NOT be penalised for not repeating it in the current turn.
+
+ADVERSARIAL AND OFF-TOPIC TURNS: If the customer sends an unauthorized, off-topic, or
+adversarial request (e.g. asking for data they are not entitled to, sending nonsense, or
+going off-script), and the AI correctly refuses and redirects back to the original issue,
+this fully satisfies the issue_acknowledged criterion. Do NOT penalize the agent for not
+re-explaining prior resolution steps. A response of the form "I cannot do X, but I can
+still help you with your original issue Y" scores 1.0 on issue_acknowledged.
+
+REDIRECT IS ACKNOWLEDGMENT: In multi-turn conversations, an agent that explicitly names
+the original issue in its redirect (e.g. "regarding your return for order 4521") has
+acknowledged the issue. Do not require a separate explicit re-acknowledgment sentence.
 
 You must return ONLY a valid JSON object — no commentary, no markdown fences.
 
@@ -81,8 +97,29 @@ def _build_judge_prompt(
     model_response: str,
     ticket_type: str,
     spec: dict[str, Any],
+    conversation_history: list[dict[str, str]] | None = None,
+    tool_calls: list[dict[str, Any]] | None = None,
 ) -> str:
     spec_text = json.dumps(spec, indent=2)
+
+    history_section = ""
+    if conversation_history:
+        lines = []
+        for turn in conversation_history:
+            role = "Customer" if turn["role"] == "user" else "Support Agent"
+            lines.append(f"{role}: {turn['content']}")
+        history_section = "## Prior Conversation\n" + "\n\n".join(lines) + "\n\n"
+
+    tool_section = ""
+    if tool_calls:
+        lines = []
+        for tc in tool_calls:
+            result_summary = json.dumps(tc.get("result", {}))
+            if len(result_summary) > 300:
+                result_summary = result_summary[:300] + "…"
+            lines.append(f"  - {tc['name']}({json.dumps(tc.get('input', {}))}) → {result_summary}")
+        tool_section = "## Tools Called This Turn\n" + "\n".join(lines) + "\n\n"
+
     return f"""\
 ## Ticket Type
 {ticket_type}
@@ -90,16 +127,21 @@ def _build_judge_prompt(
 ## Resolution Path
 {resolution_path}
 
-## Customer Message
+{history_section}{tool_section}## Latest Customer Message
 {customer_message}
 
-## AI Support Response
+## AI Support Response (to latest message)
 {model_response}
 
 ## Behavioral Spec
 {spec_text}
 
-Evaluate the AI Support Response against the spec and return the JSON verdict.
+Evaluate the AI Support Response in the context of the full conversation above.
+Steps completed in prior turns count toward the resolution path.
+For resolution_matching, verify that the tools listed above were called in the correct order
+as specified by the resolution path. A response that mentions eligibility without calling
+check_return_eligibility should score lower on resolution_matching.
+Return the JSON verdict.
 """
 
 
@@ -131,6 +173,8 @@ class JudgeService:
         resolution_path: str,
         model_response: str,
         ticket_type: str,
+        conversation_history: list[dict[str, str]] | None = None,
+        tool_calls: list[dict[str, Any]] | None = None,
     ) -> JudgeVerdict:
         spec = self._load_spec()
         user_prompt = _build_judge_prompt(
@@ -139,6 +183,8 @@ class JudgeService:
             model_response=model_response,
             ticket_type=ticket_type,
             spec=spec,
+            conversation_history=conversation_history,
+            tool_calls=tool_calls,
         )
         log = logger.bind(ticket_type=ticket_type, judge_model=self._model)
         log.debug("sending request to judge model")

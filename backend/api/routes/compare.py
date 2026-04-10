@@ -44,7 +44,7 @@ def _estimate_cost(model: str, input_tokens: int, output_tokens: int) -> CostEst
 
 
 async def _run_suite_for_model(engine: DriftEngine, model: str) -> ModelCompareResult:
-    snapshot = await engine.run_test_suite(model=model)
+    snapshot = await engine.run_test_suite(model=model, run_type="compare")
 
     # Derive non-negotiable pass rates from snapshot non_neg summary
     non_neg_pass_rates: dict[str, float] = {}
@@ -52,14 +52,7 @@ async def _run_suite_for_model(engine: DriftEngine, model: str) -> ModelCompareR
         if isinstance(summary, dict) and "pass_rate" in summary:
             non_neg_pass_rates[prop_id] = summary["pass_rate"]
 
-    # Approximate token counts from snapshot — use corpus size * avg tokens heuristic
-    # (36 examples * ~300 avg input tokens, ~200 avg output tokens per call)
-    corpus_size = 36
-    avg_input = 300
-    avg_output = 200
-    est_input = corpus_size * avg_input
-    est_output = corpus_size * avg_output
-    cost_estimate = _estimate_cost(model, est_input, est_output)
+    cost_estimate = _estimate_cost(model, snapshot.input_tokens, snapshot.output_tokens)
 
     return ModelCompareResult(
         model=model,
@@ -104,21 +97,36 @@ async def compare_models(body: CompareRequest) -> Envelope[CompareResponse]:
     # Determine winner by overall conformance
     winner: str | None = None
     winner_reason: str | None = None
-    if results:
+    if results and len(results) >= 2:
         best = max(results, key=lambda r: r.overall_conformance)
+        other = min(results, key=lambda r: r.overall_conformance)
         winner = best.model
-        second_best_score = sorted(
-            [r.overall_conformance for r in results], reverse=True
+        overall_delta = round((best.overall_conformance - other.overall_conformance) * 100, 1)
+
+        # Find the property with the largest gap
+        prop_deltas = {
+            prop: round((best.property_scores.get(prop, 0) - other.property_scores.get(prop, 0)) * 100, 1)
+            for prop in best.property_scores
+        }
+        biggest_prop = max(prop_deltas, key=lambda p: abs(prop_deltas[p]), default=None)
+        prop_names = {
+            "issue_acknowledged": "Issue Acknowledged",
+            "resolution_matching": "Resolution Matching",
+            "professional_tone": "Professional Tone",
+            "concise_response": "Concise Response",
+        }
+
+        winner_model_short = best.model.split("-")[1].capitalize() if "-" in best.model else best.model
+
+        reason = (
+            f"{winner_model_short} leads by {overall_delta}pp overall "
+            f"({best.overall_conformance * 100:.1f}% vs {other.overall_conformance * 100:.1f}%)."
         )
-        delta = (
-            round(second_best_score[0] - second_best_score[1], 4)
-            if len(second_best_score) > 1
-            else 0.0
-        )
-        winner_reason = (
-            f"{best.model} achieved highest overall conformance of "
-            f"{best.overall_conformance:.3f} (+{delta:.4f} vs next best)"
-        )
+        if biggest_prop:
+            gap = prop_deltas[biggest_prop]
+            prop_label = prop_names.get(biggest_prop, biggest_prop)
+            reason += f" Biggest gap: {prop_label} (+{abs(gap):.1f}pp)."
+        winner_reason = reason
 
     compare_response = CompareResponse(models=list(results), winner=winner, winner_reason=winner_reason)
     return Envelope(

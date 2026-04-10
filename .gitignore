@@ -39,3 +39,9 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Runtime data — generated on first run, not committed
+glassbox.db
+glassbox.db-shm
+glassbox.db-wal
+chat_logs.jsonl

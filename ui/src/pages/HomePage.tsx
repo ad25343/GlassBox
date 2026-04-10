@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/lib/ThemeToggle'
+import { CheckCircle2 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -75,9 +76,9 @@ const ARTICLES: ArticleCard[] = [
   },
   {
     num: '02',
-    title: 'Beyond Chatbots',
-    oneLiner: 'The architectural shift to AI agents',
-    href: 'https://aravinddoma.substack.com/p/beyond-chatbots-the-architectural',
+    title: 'Consistent by Design',
+    oneLiner: 'Engineering behavioral consistency into GenAI applications',
+    href: 'https://aravinddoma.substack.com/p/consistent-by-design-engineering',
   },
   {
     num: '03',
@@ -146,14 +147,12 @@ function HeroSection() {
           >
             Enter the Glass Box →
           </button>
-          <a
-            href="https://aravinddoma.substack.com"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => document.getElementById('article-series')?.scrollIntoView({ behavior: 'smooth' })}
             className="px-6 py-3 rounded-md font-semibold text-sm border border-border text-foreground transition-colors hover:bg-accent"
           >
             Read the Article Series
-          </a>
+          </button>
         </div>
       </div>
     </section>
@@ -316,9 +315,89 @@ function HowItWorksSection() {
   )
 }
 
-function ArticleSeriesSection() {
+const LOOP_STEPS = [
+  { label: 'Spec',    desc: 'Non-negotiables + behavioral properties define what good looks like',                       color: '#0D9488' },
+  { label: 'Runtime', desc: 'System prompt constructed from spec + resolution path + customer context',                 color: '#3B82F6' },
+  { label: 'Model',   desc: 'Claude Sonnet generates a response',                                                       color: '#8B5CF6' },
+  { label: 'Judge',   desc: 'Claude Haiku independently scores every response against the spec',                        color: '#F59E0B' },
+  { label: 'Verdict', desc: 'Per-property scores + pass/fail on non-negotiables',                                       color: '#F59E0B' },
+  { label: 'Pass',    desc: 'Log to database → return to customer',                                                     color: '#0D9488' },
+  { label: 'Retry',   desc: 'Non-negotiable violated → retry once with correction instruction → re-score',              color: '#F43F5E' },
+]
+
+function FrameworkAnchorSection() {
+  const navigate = useNavigate()
+
   return (
     <section className="px-6 py-16 md:px-16 lg:px-24 bg-card/50">
+      <div className="max-w-5xl mx-auto">
+        <SectionLabel>THE FRAMEWORK LOOP</SectionLabel>
+        <div className="grid md:grid-cols-2 gap-12 items-start">
+          {/* Left: explanation */}
+          <div>
+            <h2 className="text-xl font-bold text-foreground mb-4">
+              Every response goes through this cycle.
+            </h2>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+              The spec is the anchor — everything else is verification. The judge operates
+              independently of the runtime. It doesn&apos;t know whether the model thought the
+              response was good. It only knows what the spec says good looks like.
+            </p>
+            <div className="space-y-2 mb-8">
+              {[
+                'Non-negotiable violations trigger an automatic retry',
+                'Every verdict is logged to the database',
+                'Conformance rates accumulate over time for drift detection',
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" style={{ color: '#0D9488' }} />
+                  {item}
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => navigate('/spec')}
+              className="px-5 py-2.5 rounded-md text-white text-sm font-semibold transition-opacity hover:opacity-90"
+              style={{ backgroundColor: '#0D9488' }}
+            >
+              View the Behavioral Spec →
+            </button>
+          </div>
+
+          {/* Right: loop diagram */}
+          <div className="flex flex-col gap-0">
+            {LOOP_STEPS.map((step, i) => (
+              <div key={step.label} className="flex gap-4 items-start">
+                <div className="flex flex-col items-center shrink-0 w-10">
+                  <div
+                    className="h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                    style={{ backgroundColor: step.color }}
+                  >
+                    {i + 1}
+                  </div>
+                  {i < LOOP_STEPS.length - 1 && (
+                    <div
+                      className="w-px my-1"
+                      style={{ backgroundColor: step.color, opacity: 0.25, minHeight: 16 }}
+                    />
+                  )}
+                </div>
+                <div className="pb-3">
+                  <p className="text-sm font-semibold text-foreground">{step.label}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{step.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ArticleSeriesSection() {
+  return (
+    <section id="article-series" className="px-6 py-16 md:px-16 lg:px-24 bg-card/50">
       <div className="max-w-5xl mx-auto">
         <SectionLabel>PART OF THE LOCKED IN WITHOUT KNOWING IT SERIES</SectionLabel>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -385,6 +464,8 @@ export default function HomePage() {
       <ProblemSection />
       <CapabilitiesSection />
       <HowItWorksSection />
+      <ThinRule />
+      <FrameworkAnchorSection />
       <ThinRule />
       <ArticleSeriesSection />
       <QuoteSection />

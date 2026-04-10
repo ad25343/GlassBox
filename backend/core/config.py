@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     PRODUCTION_MODEL: str = "claude-sonnet-4-5"
     JUDGE_MODEL: str = "claude-haiku-4-5"
     CANDIDATE_MODEL: str = "claude-haiku-4-5"
+    SEED_SYNTHETIC_HISTORY: bool = False
 
 
 _settings: Settings | None = None

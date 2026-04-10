@@ -1,8 +1,10 @@
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { InfoTooltip, PROPERTY_DESCRIPTIONS } from '@/components/ui/score-tooltip'
 import { cn } from '@/lib/utils'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   getMonitorStatus,
@@ -42,6 +44,97 @@ function formatPropertyName(id: string): string {
     .split('_')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
+}
+
+function PropertyBreakdown({ propertyScores }: { propertyScores: Record<string, number> }) {
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2">
+      {PROPERTY_CONFIGS.map((prop) => {
+        const score = propertyScores[prop.id] ?? 0
+        const color = scoreColor(score, prop.threshold)
+        return (
+          <div key={prop.id} className="flex items-center gap-2">
+            <span className="text-[11px] text-muted-foreground w-36 flex-shrink-0">{prop.displayName}</span>
+            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${score * 100}%`, backgroundColor: color }} />
+            </div>
+            <span className="text-[11px] font-semibold tabular-nums w-10 text-right flex-shrink-0" style={{ color }}>
+              {(score * 100).toFixed(1)}%
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function AlertEntry({ alert }: { alert: VerdictResponse }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div
+      className="rounded-lg border cursor-pointer transition-colors hover:bg-red-50/5"
+      style={{ borderColor: '#F43F5E', backgroundColor: expanded ? '#F43F5E18' : '#F43F5E11' }}
+      onClick={() => setExpanded(v => !v)}
+    >
+      <div className="flex items-start gap-3 p-3">
+        <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: '#F43F5E' }} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-xs text-muted-foreground">
+              {new Date(alert.created_at).toLocaleString()}
+            </span>
+            <Badge className="text-xs" style={{ backgroundColor: '#F43F5E', color: '#fff' }}>
+              Run #{alert.run_id}
+            </Badge>
+            <Badge className="text-xs" style={{ backgroundColor: '#F43F5E', color: '#fff' }}>
+              ALERT
+            </Badge>
+            <span className="ml-auto text-sm font-semibold" style={{ color: '#F43F5E' }}>
+              {(alert.overall_score * 100).toFixed(1)}%
+            </span>
+            {expanded
+              ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+              : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+          </div>
+          {expanded && <PropertyBreakdown propertyScores={alert.property_scores} />}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function VerdictEntry({ verdict, index }: { verdict: VerdictResponse; index: number }) {
+  const [expanded, setExpanded] = useState(false)
+  const color = conformanceColor(verdict.overall_score)
+  return (
+    <div
+      className={cn('cursor-pointer hover:bg-muted/20 transition-colors', index % 2 !== 0 && 'bg-muted/10')}
+      onClick={() => setExpanded(v => !v)}
+    >
+      <div className="flex items-center gap-4 px-4 py-2.5">
+        <span className="font-mono text-xs text-muted-foreground w-40 flex-shrink-0">
+          {new Date(verdict.created_at).toLocaleString()}
+        </span>
+        <span className="font-mono text-xs w-16 flex-shrink-0">#{verdict.run_id}</span>
+        <span className="font-mono text-xs font-semibold w-14 flex-shrink-0" style={{ color }}>
+          {(verdict.overall_score * 100).toFixed(1)}%
+        </span>
+        {verdict.alert_triggered && (
+          <Badge className="text-xs" style={{ backgroundColor: '#F43F5E', color: '#fff' }}>ALERT</Badge>
+        )}
+        <span className="ml-auto">
+          {expanded
+            ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+            : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+        </span>
+      </div>
+      {expanded && (
+        <div className="px-4 pb-3">
+          <PropertyBreakdown propertyScores={verdict.property_scores} />
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function MonitorPage() {
@@ -105,8 +198,9 @@ export default function MonitorPage() {
               {/* Overall Conformance */}
               <Card>
                 <CardHeader className="pb-1">
-                  <CardTitle className="text-xs font-medium text-muted-foreground">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center">
                     Overall Conformance
+                    <InfoTooltip text="Average behavioral score across all live interactions judged so far. Scores below 90% trigger an alert. This is computed from real production traffic, not the test corpus." side="top" />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -133,8 +227,9 @@ export default function MonitorPage() {
               {/* Verdicts Monitored */}
               <Card>
                 <CardHeader className="pb-1">
-                  <CardTitle className="text-xs font-medium text-muted-foreground">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center">
                     Verdicts Monitored
+                    <InfoTooltip text="A verdict is one live customer interaction that has been scored by the judge. The judge runs asynchronously after each response and scores it against the behavioral spec." side="top" />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -152,8 +247,9 @@ export default function MonitorPage() {
               {/* Active Alerts */}
               <Card>
                 <CardHeader className="pb-1">
-                  <CardTitle className="text-xs font-medium text-muted-foreground">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center">
                     Active Alerts
+                    <InfoTooltip text="Interactions where the overall behavioral score fell below the alert threshold (80%). Each alert means a real customer response failed to meet the spec in a meaningful way." side="top" />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -220,8 +316,9 @@ export default function MonitorPage() {
                       >
                         <CardHeader className="pb-1">
                           <div className="flex items-center justify-between">
-                            <CardTitle className="text-xs font-medium text-muted-foreground">
+                            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center">
                               {displayName}
+                              <InfoTooltip text={PROPERTY_DESCRIPTIONS[propId] ?? displayName} side="top" />
                             </CardTitle>
                             {isAlert && (
                               <AlertCircle className="h-3.5 w-3.5" style={{ color: '#F43F5E' }} />
@@ -252,6 +349,7 @@ export default function MonitorPage() {
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <AlertCircle className="h-4 w-4" />
                   Alert Log
+                  <span className="ml-auto text-[11px] font-normal text-muted-foreground">click to expand</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 space-y-2">
@@ -264,35 +362,7 @@ export default function MonitorPage() {
                   <p className="text-sm text-muted-foreground text-center py-2">No alerts</p>
                 ) : (
                   alerts.map((alert: VerdictResponse, i: number) => (
-                    <div
-                      key={alert.id ?? i}
-                      className="flex items-start gap-3 rounded-lg border p-3"
-                      style={{ borderColor: '#F43F5E', backgroundColor: '#F43F5E11' }}
-                    >
-                      <AlertCircle
-                        className="h-4 w-4 flex-shrink-0 mt-0.5"
-                        style={{ color: '#F43F5E' }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {new Date(alert.created_at).toLocaleString()}
-                          </span>
-                          <Badge className="text-xs" style={{ backgroundColor: '#F43F5E', color: '#fff' }}>
-                            Run #{alert.run_id}
-                          </Badge>
-                          <Badge className="text-xs" style={{ backgroundColor: '#F43F5E', color: '#fff' }}>
-                            ALERT
-                          </Badge>
-                        </div>
-                        <p className="text-sm mt-0.5">
-                          Overall score:{' '}
-                          <strong style={{ color: '#F43F5E' }}>
-                            {(alert.overall_score * 100).toFixed(1)}%
-                          </strong>
-                        </p>
-                      </div>
-                    </div>
+                    <AlertEntry key={alert.id ?? i} alert={alert} />
                   ))
                 )}
               </CardContent>
@@ -301,7 +371,10 @@ export default function MonitorPage() {
             {/* Verdict log */}
             <Card>
               <CardHeader className="border-b pb-3">
-                <CardTitle className="text-sm font-medium">Recent Verdicts</CardTitle>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  Recent Verdicts
+                  <span className="ml-auto text-[11px] font-normal text-muted-foreground">click to expand</span>
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 {verdictsLoading ? (
@@ -315,53 +388,11 @@ export default function MonitorPage() {
                     No verdicts yet
                   </div>
                 ) : (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        {['Time', 'Run ID', 'Overall', ...PROPERTY_CONFIGS.map((p) => p.displayName)].map((h) => (
-                          <th
-                            key={h}
-                            className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {verdicts.slice(0, 10).map((verdict: VerdictResponse, i: number) => (
-                        <tr
-                          key={verdict.id ?? i}
-                          className={cn('border-b last:border-0', i % 2 === 0 ? '' : 'bg-muted/30')}
-                        >
-                          <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
-                            {new Date(verdict.created_at).toLocaleString()}
-                          </td>
-                          <td className="px-4 py-2.5 font-mono text-xs">
-                            #{verdict.run_id}
-                          </td>
-                          <td
-                            className="px-4 py-2.5 font-mono text-xs font-semibold"
-                            style={{ color: conformanceColor(verdict.overall_score) }}
-                          >
-                            {(verdict.overall_score * 100).toFixed(1)}%
-                          </td>
-                          {PROPERTY_CONFIGS.map((prop) => {
-                            const propScore = verdict.property_scores[prop.id] ?? 0
-                            return (
-                              <td
-                                key={prop.id}
-                                className="px-4 py-2.5 font-mono text-xs"
-                                style={{ color: scoreColor(propScore, prop.threshold) }}
-                              >
-                                {(propScore * 100).toFixed(1)}%
-                              </td>
-                            )
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="divide-y divide-border/40">
+                    {verdicts.slice(0, 10).map((verdict: VerdictResponse, i: number) => (
+                      <VerdictEntry key={verdict.id ?? i} verdict={verdict} index={i} />
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>

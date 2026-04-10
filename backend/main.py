@@ -7,7 +7,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api.routes import compare, monitor, runs, traces
+from backend.api.routes import chatlogs, compare, monitor, runs, sessions, spec, traces
 from backend.core import db
 from backend.core.config import get_settings
 from backend.core.logging import configure_logging, get_logger
@@ -25,7 +25,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     config = get_settings()
     drift = DriftEngine(config)
-    drift.seed_synthetic_history()
+    if config.SEED_SYNTHETIC_HISTORY:
+        drift.seed_synthetic_history()
     logger.info("drift engine ready")
 
     yield
@@ -50,8 +51,11 @@ app.add_middleware(
 
 app.include_router(traces.router)
 app.include_router(runs.router)
+app.include_router(sessions.router)
 app.include_router(compare.router)
 app.include_router(monitor.router)
+app.include_router(spec.router)
+app.include_router(chatlogs.router)
 
 
 @app.get("/health", tags=["health"])

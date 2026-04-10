@@ -54,7 +54,7 @@ These three properties map directly to the most common trust-breaking failure mo
 
 | ID | Name | Target | Alert Threshold | Description |
 |---|---|---|---|---|
-| `issue_acknowledged` | Issue acknowledged | 0.95 | 0.85 | Acknowledge the customer's issue before offering a resolution |
+| `issue_acknowledged` | Issue acknowledged | 0.95 | 0.85 | Acknowledge the customer's issue before offering a resolution. In multi-turn conversations, correctly refusing an off-topic or unauthorized request and redirecting to the original issue fully satisfies this criterion. |
 | `resolution_matching` | Resolution matching | 0.90 | 0.80 | Resolution matches the documented path for that ticket type |
 | `professional_tone` | Professional tone | 0.90 | 0.80 | Tone is professional and empathetic throughout |
 | `concise_response` | Concise response | 0.85 | 0.75 | Response is concise — no unnecessary repetition or padding |
@@ -72,6 +72,14 @@ The judge's evaluation is driven by two pieces:
 **User prompt** (built by `_build_judge_prompt`): A structured block containing the ticket type, the documented resolution path, the customer's message, the model's response, and the full contents of `spec.json`. Embedding the live spec means the judge automatically picks up spec changes without requiring a code change.
 
 The judge is instructed to return only valid JSON with no markdown fencing. A regex-based extraction step strips any fencing if present before parsing.
+
+### Judge Hardening — Adversarial and Off-Topic Turns
+
+The judge system prompt includes explicit rules for multi-turn scenarios where the customer goes off-script:
+
+- **Adversarial turns**: If a customer sends an unauthorized or off-topic request (e.g. asking for data they are not entitled to) and the agent correctly refuses and redirects to the original issue, this scores 1.0 on `issue_acknowledged`. The judge does not penalize correct refusals.
+- **Redirect counts as acknowledgment**: An agent that names the original issue in its redirect (e.g. "regarding your return for order 4521") has acknowledged the issue. A separate re-acknowledgment sentence is not required.
+- **Prior turn credit**: Steps completed in earlier turns are not re-evaluated. If order status was checked in turn 1, the agent is not penalized for not repeating it in turn 2.
 
 ---
 
@@ -96,7 +104,7 @@ graph TD
     call_sonnet["Call Claude Sonnet\n→ initial response"]
     judge_initial["Judge scores response\nagainst spec"]
     check{"any_non_negotiable\n_failed = true?"}
-    retry_prompt["Append _RETRY_ADDENDUM\nto system prompt\n(correction instruction)"]
+    retry_prompt["Append retry_addendum from spec.json\nto system prompt\n(correction instruction)"]
     call_sonnet_retry["Call Claude Sonnet again\n→ revised response"]
     judge_retry["Judge scores revised\nresponse"]
     write_db["Write run + conformance\nresults + verdict to SQLite"]
@@ -120,25 +128,46 @@ graph TD
 - If the Anthropic API call fails on the retry, the original response and original verdict are preserved and returned.
 - Token counts from both the initial call and the retry are summed and recorded in `runs.total_tokens`.
 - The `retried` flag in `RunResult` (and in the API response) tells the frontend whether a retry occurred, which is displayed in the verification panel.
-- The `_RETRY_ADDENDUM` explicitly names all three non-negotiables by description in plain language, giving Sonnet a clear corrective instruction rather than a vague warning.
+- The `retry_addendum` in `spec.json` explicitly names all three non-negotiables by description in plain language, giving Sonnet a clear corrective instruction rather than a vague warning.
 
 ---
 
 ## How to Extend the Spec
 
-To add a new behavioral property:
+### Add a new behavioral property
 
 1. Add an entry to `spec.json` under `behavioral_properties` with a unique `id`, `name`, `description`, `target`, and `alert_threshold`.
-2. The judge will automatically pick it up on the next call — no code changes required. The judge prompt embeds the full spec.
-3. The runtime's alert logic iterates `spec["behavioral_properties"]` dynamically, so alert detection for the new property is automatic.
-4. The frontend conformance tables and drift charts are driven by the property keys returned from the API, so new properties will appear automatically.
+2. The judge picks it up automatically — the judge prompt embeds the full spec.
+3. The runtime's alert logic iterates `spec["behavioral_properties"]` dynamically, so alert detection is automatic.
+4. The frontend conformance tables and drift charts are driven by property keys returned from the API, so new properties appear automatically.
 
-To add a new non-negotiable:
+### Add a new non-negotiable
 
 1. Add an entry to `spec.json` under `non_negotiables` with a unique `id`, `name`, `description`, and `zero_tolerance: true`.
-2. Update `_SYSTEM_TEMPLATE` in `runtime.py` if the new rule requires a specific phrasing in the system prompt (it is currently built dynamically from the spec, so this may already be handled).
-3. Update the `_RETRY_ADDENDUM` in `runtime.py` to explicitly call out the new rule in retry instructions.
+2. The system prompt is built dynamically from `spec["non_negotiables"]` — no code change needed.
+3. Update `spec["retry_addendum"]` to call out the new rule explicitly in retry instructions.
 
-To change thresholds or targets, edit the values in `spec.json` directly. No code changes are needed — thresholds are read at runtime.
+### Add a new ticket type and resolution path
 
-To add a new ticket type and resolution path, add an entry to `RESOLUTION_PATHS` in `runtime.py`. The spec itself does not encode resolution paths — they live in the service layer.
+1. Add the ticket type key and its step-by-step instructions to `spec["resolution_paths"]`.
+2. Add corresponding labeled examples to `corpus.json` using that ticket type.
+3. Implement any new tools needed in `backend/services/tools.py` and add them to `spec["tools"]`.
+
+No Python changes are required for steps 1–2.
+
+### Change thresholds or targets
+
+Edit `target` or `alert_threshold` values in `spec.json` directly. No code changes needed — thresholds are read at runtime.
+
+### What spec.json now contains
+
+As of the current version, `spec.json` is the single configuration file for all domain-specific content:
+
+| Key | What it controls |
+|---|---|
+| `agent` | Agent role, task description, conversation style bullets shown in the system prompt |
+| `resolution_paths` | Per-ticket-type step-by-step agent instructions (keyed by `ticket_type`) |
+| `tools` | Tool names, signatures, and descriptions shown in the agent system prompt |
+| `retry_addendum` | The correction message appended to the system prompt on a non-negotiable violation |
+| `non_negotiables` | Binary pass/fail rules, zero-tolerance |
+| `behavioral_properties` | Scored 0–1 properties with targets and alert thresholds |

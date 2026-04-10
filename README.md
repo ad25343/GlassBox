@@ -1,112 +1,214 @@
 # Glass Box
 
-A customer support AI with full behavioral visibility. Built as a companion to the [Locked In Without Knowing It](https://aravinddoma.substack.com/p/locked-in-without-knowing-it-why) article series on [aravinddoma.substack.com](https://aravinddoma.substack.com).
+**Spec-driven development for GenAI applications.**
 
-Most GenAI applications are black boxes — a prompt goes in, a response comes out, and there's no systematic way to verify whether the application is behaving as designed. Glass Box is the same application, but you can see inside it.
+Spec-driven development means defining exactly what the system should do — independently of how it does it — then continuously verifying that actual behavior conforms to that definition. Not as a one-time audit. As living infrastructure.
+
+A working reference implementation showing what a production GenAI application looks like when behavioral transparency is built in from the start — not bolted on after.
+
+The behavioral specification is the source of truth for everything: the system prompt, the judge's evaluation, the retry logic, the alert thresholds, and the drift history. Swapping models or adapting to a new domain means replacing two files. Nothing else changes.
+
+Built as a companion to the [Locked In Without Knowing It](https://aravinddoma.substack.com/p/locked-in-without-knowing-it-why) article series.
+
+---
 
 ## What it shows
 
-- **Behavioral spec** — a machine-readable contract defining what the application is supposed to do
-- **Conformance scoring** — every response is scored against the spec by a judge model
-- **Drift detection** — behavioral history over time, with threshold alerts
-- **Model comparison** — Sonnet vs Haiku on identical behavioral criteria, not benchmark numbers
-- **Production monitoring** — simulated live conformance monitoring with a running verdict log
+- **Behavioral spec** — a machine-readable contract defining what the application must do, with non-negotiables and scored properties
+- **Multi-turn agent** — the model calls deterministic tools (order lookup, return eligibility, billing history) before generating a response, not a single-shot prompt
+- **Conformance scoring** — every response is scored against the spec by an independent judge model, including whether the right tools were called in the right order
+- **Drift detection** — behavioral history over 14 days, with per-property trend lines and threshold alerts
+- **Model comparison** — Sonnet vs Haiku on identical behavioral criteria, with cost-per-conforming-output
+- **Production monitoring** — live conformance monitoring with a running verdict log and alert feed
+- **Chat log analytics** — session-level visibility into tool call sequences, conformance by ticket type, and agent behavior patterns
 
-## Setup
+---
+
+## Quickstart
 
 ### Requirements
+
 - Python 3.11+
 - Node.js 18+
-- An Anthropic API key
+- An [Anthropic API key](https://console.anthropic.com/) — the only required credential
 
-### Install
+### 1. Clone and install
 
 ```bash
-# Clone the repo
 git clone https://github.com/ad25343/GlassBox.git
 cd GlassBox
-
-# Install all dependencies (Python + Node)
 make install
 ```
 
-### Configure
+### 2. Configure
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and add your Anthropic API key:
+Open `.env` and set your Anthropic API key:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### Run
+Everything else in `.env.example` is optional.
+
+### 3. Run
 
 ```bash
 make dev
 ```
 
-This starts both servers:
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:8888
-- **API docs**: http://localhost:8888/docs
+This starts both servers concurrently:
+
+| | URL |
+|---|---|
+| **Frontend** | http://localhost:5173 |
+| **Backend API** | http://localhost:8888 |
+| **API docs** | http://localhost:8888/docs |
+
+The database is created and seeded automatically on first run — no migration step needed.
+
+---
 
 ## Pages
 
-| Page | What it does |
-|---|---|
-| **Home** | Explains the Glass Box concept and links to all five capabilities |
-| **Try It** | Submit a live customer support ticket. See the response and the judge's verification side-by-side. |
-| **Test Suite** | Run the full 36-example ground truth corpus through the model. Get a per-property conformance report. Save as a baseline. |
-| **Baseline & Drift** | 14-day behavioral history. Timeline chart, snapshot table, incident log. Pre-populated with synthetic history showing realistic drift patterns. |
-| **Model Comparison** | Run the same spec and test suite against Claude Sonnet and Claude Haiku. Compare on behavioral criteria, with cost-per-conforming-output. |
-| **Production Monitor** | Simulated production conformance monitoring. Running conformance rate by ticket category, alert log, individual verdict log. |
+| Page | Route | What it does |
+|---|---|---|
+| **Home** | `/` | Overview of the Glass Box concept |
+| **Live Runtime** | `/try-it` | Submit a ticket as one of the seeded personas. Watch the agent call tools, then see the judge's verdict with per-property scores. |
+| **Test Suite** | `/test-suite` | Run the full 36-example corpus through the model. Get a per-property conformance report. Save as a baseline. |
+| **Baseline & Drift** | `/drift` | 14-day behavioral history. Pre-seeded with synthetic drift patterns so the timeline tells a story immediately. |
+| **Model Comparison** | `/compare` | Run Sonnet and Haiku against the same spec and corpus. Compare on behavioral properties, not benchmark numbers. |
+| **Production Monitor** | `/monitor` | Simulated live monitoring. Running conformance rate by ticket category, alert log, verdict feed. |
+| **Chat Log Analytics** | `/chatlogs` | Tool call frequency, sequence patterns, session-level conformance, and turn log — the operator's view of what the agent is doing on every conversation. |
+
+---
 
 ## How it works
 
 ### The behavioral spec (`spec.json`)
 
-Defines what the application is supposed to do in precise, testable terms.
+The source of truth for everything domain-specific — this is what makes GlassBox spec-driven. The runtime reads it to build the system prompt. The judge reads it to score responses. The alert logic reads it for thresholds. The retry reads it for the correction instruction. To adapt to a new domain, replace this file and the corpus.
 
-**Non-negotiables** (binary — zero tolerance):
+**Non-negotiables** — binary pass/fail, zero tolerance:
 - Never promise a refund without first checking eligibility
-- Always escalate to a human if the customer expresses frustration more than once
-- Never share account details that weren't in the provided context
+- Always escalate to a human if the customer expresses frustration more than once in the same session
+- Never reference account information that wasn't provided in the session context
 
-**Behavioral properties** (scored, with targets and alert thresholds):
-- Issue acknowledged before resolution (target: >95%, alert: <85%)
-- Resolution matches documented path (target: >90%, alert: <80%)
-- Professional and empathetic tone (target: >90%, alert: <80%)
-- Concise — no unnecessary repetition (target: >85%, alert: <75%)
+**Behavioral properties** — scored 0–1, with targets and alert thresholds:
+- Issue acknowledged before resolution (target 95%, alert below 85%)
+- Resolution matches the documented path (target 90%, alert below 80%)
+- Professional and empathetic tone (target 90%, alert below 80%)
+- Concise — no unnecessary repetition (target 85%, alert below 75%)
+
+### The agent loop (`backend/services/agent.py`)
+
+The model doesn't generate a response from a pre-filled context. It runs as a multi-turn agent, calling tools to discover what it needs:
+
+1. Customer message arrives
+2. Model decides which tools to call — in order, as specified by the resolution path
+3. Each tool returns a deterministic result (database lookup, no inference)
+4. Model generates the final response from what it found
+
+Maximum 5 tool calls per turn. If the cap is hit, the runtime forces a final response without tools.
+
+### The tools (`backend/services/tools.py`)
+
+Six deterministic tools — all direct database reads, no LLM involvement:
+
+| Tool | What it does |
+|---|---|
+| `lookup_customer` | Finds customer record by last name and order ID |
+| `get_order_details` | Returns order status, items, tracking, delivery date |
+| `check_return_eligibility` | Computes days since delivery vs. 30-day return window |
+| `get_return_label` | Returns a deterministic pre-paid label reference |
+| `get_billing_charges` | Lists charges for an order |
+| `get_order_history` | Lists all orders for a customer |
+
+### Seed data
+
+The database is pre-seeded with five customer personas and realistic support scenarios so the Live Runtime page works immediately:
+
+| Persona | Scenario |
+|---|---|
+| Sarah Chen | Order in transit, last scan 4 days ago |
+| James Rodriguez | Delivered 18 days ago, 12 days left in return window |
+| Priya Patel | $89 charge dispute on a delivered order |
+| Michael Thompson | Order delivered, checking status |
+| Emily Davis | Order history lookup |
 
 ### The judge (`backend/services/judge.py`)
 
-Claude Haiku, prompted to evaluate every response against the spec. Receives the customer message, the documented resolution path, and the model's response. Returns a structured JSON verdict with per-property scores and reasoning.
+Claude Haiku, running as an independent evaluator. Receives the customer message, the documented resolution path, the full tool call trace, and the model's response. Returns a structured JSON verdict with per-property scores and reasoning. Crucially: it verifies that the right tools were called in the right order, not just that the response text is good.
 
-### The runtime (`backend/services/runtime.py`)
+If any non-negotiable fails, the runtime retries once with a correction instruction and re-scores.
 
-Constructs prompts from the spec and resolution paths. Calls Claude Sonnet. Validates against non-negotiables. If any non-negotiable fails, retries once with an explicit correction instruction. Logs everything to SQLite.
+### The log writer (`backend/services/log_writer.py`)
+
+Every live session is written asynchronously to two places:
+- **SQLite** (`glassbox.db`) — queryable, powers the Chat Log Analytics page
+- **JSONL** (`chat_logs.jsonl`) — portable, one line per turn, easy to inspect
+
+The write is fire-and-forget — it doesn't block the response.
 
 ### Drift detection (`backend/services/drift.py`)
 
-Runs the full corpus against the live model on a schedule, stores snapshots, and computes per-property deltas against the baseline. The demo is pre-seeded with 14 days of synthetic history so the drift page tells a story immediately.
+Runs the full 36-example corpus against the live model on demand, stores a snapshot with model version and prompt version, and computes per-property deltas against the baseline. The demo is pre-seeded with 14 days of synthetic history so the drift page has a story to tell immediately.
+
+---
+
+## Running tests
+
+```bash
+pytest
+```
+
+Tests live in `tests/`, mirroring the `backend/` structure. All LLM calls are mocked — no API key needed to run the test suite.
+
+---
+
+## Project structure
+
+```
+GlassBox/
+├── backend/
+│   ├── api/routes/         # traces, runs, compare, monitor, chatlogs
+│   ├── core/               # config, db (init + seed), logging
+│   ├── services/           # agent, tools, judge, runtime, drift, log_writer
+│   └── main.py
+├── ui/src/
+│   ├── pages/              # one file per page
+│   ├── components/         # layout + shadcn ui
+│   └── lib/                # api.ts, utils, theme
+├── tests/                  # pytest — mirrors backend/
+├── spec.json               # behavioral contract
+├── corpus.json             # 36 labeled ground-truth examples
+└── docs/                   # architecture, data flow, behavioral spec docs
+```
+
+---
 
 ## Tech stack
 
 - **Backend**: Python / FastAPI / SQLite
 - **Frontend**: React + Vite + TypeScript + Tailwind CSS + shadcn/ui
-- **Models**: Claude Sonnet (production), Claude Haiku (judge + candidate comparison)
+- **Models**: Claude Sonnet (production agent), Claude Haiku (judge + comparison candidate)
+- **SDKs**: `anthropic` Python SDK with tool_use API
+
+---
 
 ## Article series
 
-Glass Box is a companion project to the *Locked In Without Knowing It* series on [aravinddoma.substack.com](https://aravinddoma.substack.com):
+Glass Box is a companion project to the *Locked In Without Knowing It* series:
 
 1. [Locked In Without Knowing It](https://aravinddoma.substack.com/p/locked-in-without-knowing-it-why) — Why swapping GenAI models breaks more than you think
-2. [Beyond Chatbots](https://aravinddoma.substack.com/p/beyond-chatbots-the-architectural) — The architectural shift to AI agents
-3. [Verified by Design](https://aravinddoma.substack.com/p/verified-by-design-behavioral-consistency) — Behavioral consistency in GenAI — the verification layer
-4. **Glass Box** — coming soon
+2. [Consistent by Design](https://aravinddoma.substack.com/p/consistent-by-design-engineering) — Engineering behavioral consistency into GenAI applications
+3. [Verified by Design](https://aravinddoma.substack.com/p/verified-by-design-behavioral-consistency) — The verification layer
+4. [Glass Box](https://aravinddoma.substack.com/p/the-glass-box) — Spec-driven development, the full working implementation
+
+---
 
 ## License
 

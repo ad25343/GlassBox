@@ -52,6 +52,9 @@ async def submit_ticket(body: SubmitTicketRequest) -> Envelope[RunResponse]:
             ticket_type=body.ticket_type,
             context=body.context,
             model=body.model,
+            conversation_history=[t.model_dump() for t in body.conversation_history],
+            session_id=body.session_id,
+            scenario_id=body.scenario_id,
         )
     except anthropic.AuthenticationError:
         logger.error("anthropic authentication error — check ANTHROPIC_API_KEY")
@@ -70,8 +73,12 @@ async def submit_ticket(body: SubmitTicketRequest) -> Envelope[RunResponse]:
         logger.error("unexpected error handling ticket", error=str(exc), traceback=tb.format_exc())
         raise HTTPException(status_code=500, detail="Unexpected error. Check server logs for details.") from exc
 
+    from backend.api.schemas import ToolCall
+
     run_response = RunResponse(
         run_id=result.run_id,
+        session_id=result.session_id,
+        turn_number=result.turn_number,
         model=result.model,
         ticket_type=result.ticket_type,
         customer_message=result.customer_message,
@@ -83,5 +90,6 @@ async def submit_ticket(body: SubmitTicketRequest) -> Envelope[RunResponse]:
         prompt_version=result.prompt_version,
         system_prompt=result.system_prompt,
         resolution_path=result.resolution_path,
+        tool_calls=[ToolCall(**tc) for tc in result.tool_calls],
     )
-    return Envelope(data=run_response, meta={"model": result.model})
+    return Envelope(data=run_response, meta={"model": result.model, "session_id": result.session_id})

@@ -62,7 +62,7 @@ sequenceDiagram
     Judge-->>Runtime: JudgeVerdict (non_negotiable_results, behavioral_scores, overall_conformance)
 
     alt any_non_negotiable_failed
-        Runtime->>Runtime: Append _RETRY_ADDENDUM to system prompt
+        Runtime->>Runtime: Append retry_addendum from spec.json to system prompt
         Runtime->>Sonnet: messages.create(retry_system_prompt, customer_message)
         Sonnet-->>Runtime: revised response + token counts
         Runtime->>Judge: score(revised response)
@@ -74,6 +74,7 @@ sequenceDiagram
     Runtime->>SQLite: insert_run(...) → run_id
     Runtime->>SQLite: insert_conformance_results(run_id, rows)
     Runtime->>SQLite: insert_production_verdict(run_id, overall_score, alert_triggered)
+    Runtime->>SQLite: insert_chat_log(session_id, run_id, verdict_summary_json)\nNote over SQLite: verdict_summary includes full reasoning\nper property (non-negotiables + behavioral scores)
     Runtime-->>API: RunResult (response, verdict, latency_ms, total_tokens, retried)
     API-->>Frontend: Envelope { data: RunResponse }
     Frontend->>User: Render response in chat panel + verification panel side-by-side
@@ -112,7 +113,7 @@ graph LR
 
     subgraph Retry Logic
         check{"any_non_negotiable\n_failed?"}
-        retry["Append _RETRY_ADDENDUM\nto system prompt\n→ call Sonnet again\n→ re-score with Haiku"]
+        retry["Append retry_addendum (from spec.json)\nto system prompt\n→ call Sonnet again\n→ re-score with Haiku"]
         done["Accept response\nWrite to SQLite"]
     end
 
@@ -131,28 +132,34 @@ Drift detection tracks how model conformance changes over time by maintaining a 
 ```mermaid
 graph TD
     subgraph Startup
+        env_flag{"SEED_SYNTHETIC_HISTORY\n= true in .env?"}
         seed["seed_synthetic_history()"]
         check_existing{"snapshots\nalready exist?"}
         insert_synthetic["Insert 14 days of\nsynthetic snapshots\n(pre-scripted scores\n+ small random jitter)"]
         skip["Skip — history\nalready present"]
+        skip_seed["Skip — seeding\nnot enabled"]
 
+        env_flag -->|Yes| seed
+        env_flag -->|No| skip_seed
         seed --> check_existing
         check_existing -->|No| insert_synthetic
         check_existing -->|Yes| skip
     end
 
     subgraph Test Suite Run
-        trigger["run_test_suite(model)\n— on-demand via POST /api/v1/runs/snapshot\n— or triggered by /compare"]
+        trigger["run_test_suite(model, run_type)\n— on-demand via POST /api/v1/runs/snapshot\n— or triggered by /compare"]
         corpus["Load corpus.json\n(36 labeled examples)"]
         loop["For each example:\nruntime.handle_ticket()\n→ judge.score()"]
         aggregate["Aggregate per-property\naverage scores"]
-        snapshot["Insert baseline_snapshot\nto SQLite"]
+        store_examples["Insert per-example results\nto snapshot_examples\n(one row per corpus example)"]
+        snapshot["INSERT baseline_snapshot\n(run_type: baseline|test|compare)"]
 
         trigger --> corpus --> loop --> aggregate --> snapshot
+        loop --> store_examples
     end
 
     subgraph History & Analysis
-        get_history["get_history()\nSELECT * FROM baseline_snapshots\nORDER BY created_at ASC"]
+        get_history["get_history()\nSELECT baseline_snapshots\nWHERE run_type = 'baseline'\nORDER BY created_at ASC"]
         compute_deltas["compute_deltas(snapshots)\nCompare latest vs first snapshot\nfor each property"]
         detect_incidents["detect_incidents(snapshots)\nFlag any property score\nbelow alert_threshold"]
     end
@@ -206,9 +213,21 @@ erDiagram
         TEXT model
         TEXT prompt_version
         TEXT corpus_version
+        TEXT run_type
         REAL overall_conformance
         TEXT property_scores_json
         TEXT non_negotiable_results_json
+    }
+
+    snapshot_examples {
+        INTEGER id PK
+        INTEGER snapshot_id FK
+        TEXT corpus_example_id
+        TEXT ticket_type
+        TEXT customer_message_truncated
+        REAL overall_score
+        TEXT property_scores_json
+        INTEGER non_negotiables_passed
     }
 
     production_verdicts {
@@ -222,6 +241,7 @@ erDiagram
 
     runs ||--o{ conformance_results : "has"
     runs ||--o| production_verdicts : "has"
+    baseline_snapshots ||--o{ snapshot_examples : "has"
 ```
 
 **Notes on storage conventions:**
@@ -230,6 +250,7 @@ erDiagram
 - `conformance_results.score` is `NULL` for non-negotiable rows (they are binary pass/fail only).
 - `context`, `verdict_json`, `property_scores_json`, and `non_negotiable_results_json` are stored as JSON text and deserialized in the `db.py` layer before being returned to callers.
 - `baseline_snapshots` has no direct FK to `runs` — it is an aggregate summary produced by the drift engine, not tied to any individual run.
+- `run_type` on `baseline_snapshots` separates data by page: `"baseline"` (Drift page), `"test"` (Test Suite page), `"compare"` (Model Comparison page). `snapshot_examples` stores per-example results with cascade delete tied to the parent snapshot.
 
 ---
 
@@ -269,8 +290,11 @@ graph LR
 |---|---|---|
 | Home | `/` | None (static splash page) |
 | Try It | `/try-it` | `POST /api/v1/traces/` |
-| Test Suite | `/test-suite` | `GET /api/v1/runs/snapshots`, `POST /api/v1/runs/snapshot` |
-| Baseline & Drift | `/drift` | `GET /api/v1/runs/snapshots`, `GET /api/v1/runs/incidents` |
+| Test Suite | `/test-suite` | `GET /api/v1/runs/snapshots?run_type=test`, `POST /api/v1/runs/snapshot` |
+| Baseline & Drift | `/drift` | `GET /api/v1/runs/snapshots?run_type=baseline`, `GET /api/v1/runs/snapshots/{id}/diff`, `GET /api/v1/runs/incidents` |
 | Model Comparison | `/compare` | `POST /api/v1/compare/` |
 | Production Monitor | `/monitor` | `GET /api/v1/monitor/status`, `GET /api/v1/monitor/verdicts`, `GET /api/v1/monitor/alerts` |
+| Chat Log Analytics | `/chatlogs` | `GET /api/v1/chatlogs/analytics`, `GET /api/v1/chatlogs/?session_id=&ticket_type=` |
 | Traces (internal) | n/a | `GET /api/v1/traces/`, `GET /api/v1/traces/{run_id}` |
+
+**Per-example detail:** `GET /api/v1/runs/snapshots/{id}/examples` returns the 36 per-example results for any snapshot. `GET /api/v1/runs/snapshots/{id}/diff` returns changed examples between a snapshot and its predecessor — used by the Drift page when a snapshot point is selected.

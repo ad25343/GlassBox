@@ -16,6 +16,9 @@ __all__ = [
     "RunDetailResponse",
     "ConformanceResultItem",
     "SnapshotResponse",
+    "SnapshotExampleItem",
+    "ExampleDiffEntry",
+    "SnapshotDiffResponse",
     "TriggerSnapshotRequest",
     "IncidentResponse",
     "CompareRequest",
@@ -26,6 +29,7 @@ __all__ = [
     "BehavioralScore",
     "NonNegotiableResult",
     "JudgeVerdict",
+    "ToolCall",
 ]
 
 
@@ -36,6 +40,20 @@ class Envelope(BaseModel, Generic[T]):
     meta: dict[str, Any] = Field(default_factory=dict)
 
 
+class ConversationTurn(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class ToolCall(BaseModel):
+    model_config = {"extra": "ignore"}
+
+    name: str
+    input: dict[str, Any]
+    result: dict[str, Any]
+    tool_use_id: str
+
+
 class SubmitTicketRequest(BaseModel):
     model_config = {"extra": "ignore"}
 
@@ -43,6 +61,9 @@ class SubmitTicketRequest(BaseModel):
     ticket_type: str
     context: dict[str, Any] = Field(default_factory=dict)
     model: str | None = None
+    conversation_history: list[ConversationTurn] = Field(default_factory=list)
+    session_id: str | None = None       # None → backend creates a new session
+    scenario_id: str = ""
 
 
 class ConformanceResultItem(BaseModel):
@@ -61,6 +82,8 @@ class RunResponse(BaseModel):
     model_config = {"extra": "ignore"}
 
     run_id: int
+    session_id: str
+    turn_number: int
     created_at: str | None = None
     model: str
     ticket_type: str
@@ -73,6 +96,7 @@ class RunResponse(BaseModel):
     prompt_version: str
     system_prompt: str
     resolution_path: str
+    tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
 class RunDetailResponse(BaseModel):
@@ -115,10 +139,56 @@ class SnapshotResponse(BaseModel):
     overall_conformance: float
     property_scores: dict[str, float]
     non_negotiable_results: dict[str, Any]
+    category_scores: dict[str, dict[str, float]] = Field(default_factory=dict)
+    input_tokens: int = 0
+    output_tokens: int = 0
+    run_type: str = "baseline"
+
+
+class SnapshotExampleItem(BaseModel):
+    model_config = {"extra": "ignore"}
+
+    id: int
+    snapshot_id: int
+    corpus_example_id: str
+    ticket_type: str
+    customer_message_truncated: str
+    overall_score: float
+    property_scores: dict[str, float]
+    non_negotiables_passed: bool
+
+
+class ExampleDiffEntry(BaseModel):
+    model_config = {"extra": "ignore"}
+
+    corpus_example_id: str
+    ticket_type: str
+    customer_message_truncated: str
+    previous_overall_score: float
+    current_overall_score: float
+    score_delta: float
+    status: str  # "newly_failed" | "newly_recovered" | "degraded" | "improved"
+    changed_properties: dict[str, float]  # prop_id → delta (current - previous)
+
+
+class SnapshotDiffResponse(BaseModel):
+    model_config = {"extra": "ignore"}
+
+    snapshot_id: int
+    previous_snapshot_id: int
+    snapshot_created_at: str
+    previous_snapshot_created_at: str
+    newly_failed: list[ExampleDiffEntry]
+    newly_recovered: list[ExampleDiffEntry]
+    degraded: list[ExampleDiffEntry]
+    improved: list[ExampleDiffEntry]
+    total_changed: int
+    summary: dict[str, int]
 
 
 class TriggerSnapshotRequest(BaseModel):
     model: str = "claude-haiku-4-5"
+    run_type: str = "test"  # "test" | "baseline" | "compare"
 
 
 class IncidentResponse(BaseModel):

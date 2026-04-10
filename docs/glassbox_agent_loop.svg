@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="580" font-family="Arial, sans-serif">
+  <rect width="960" height="580" fill="white"/>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#2e5299"/>
+    </marker>
+    <marker id="arrTeal" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#0D9488"/>
+    </marker>
+    <marker id="arrRed" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#cc3333"/>
+    </marker>
+    <marker id="arrGrey" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#888888"/>
+    </marker>
+    <marker id="arrPurple" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#7755cc"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="480" y="28" text-anchor="middle" font-size="16" font-weight="bold" fill="#1a2744">GlassBox — Agent Loop (Single Turn)</text>
+  <text x="480" y="46" text-anchor="middle" font-size="11" fill="#555555">How one customer message becomes a verified, grounded response</text>
+
+  <!-- ══════ MAIN FLOW: left column ══════ -->
+
+  <!-- 1. Customer Message -->
+  <rect x="40" y="64" width="220" height="52" rx="6" fill="#e6faf8" stroke="#0D9488" stroke-width="1.5"/>
+  <text x="150" y="86" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a2744">Customer Message</text>
+  <text x="150" y="102" text-anchor="middle" font-size="9" fill="#555555">"I want to return my order."</text>
+
+  <!-- arrow down -->
+  <line x1="150" y1="116" x2="150" y2="132" stroke="#2e5299" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- 2. System Prompt Assembly -->
+  <rect x="40" y="132" width="220" height="52" rx="6" fill="#d5e8f0" stroke="#2e5299" stroke-width="1.5"/>
+  <text x="150" y="154" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a2744">System Prompt</text>
+  <text x="150" y="170" text-anchor="middle" font-size="9" fill="#555555">Spec rules + resolution path + history</text>
+
+  <!-- arrow down -->
+  <line x1="150" y1="184" x2="150" y2="200" stroke="#2e5299" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- 3. Claude Sonnet (Agent) -->
+  <rect x="40" y="200" width="220" height="52" rx="6" fill="#f5f0ff" stroke="#7755cc" stroke-width="1.5"/>
+  <text x="150" y="222" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a2744">Claude Sonnet</text>
+  <text x="150" y="238" text-anchor="middle" font-size="9" fill="#555555">Reasons · decides which tools to call</text>
+
+  <!-- arrow right to tool loop -->
+  <line x1="260" y1="226" x2="290" y2="226" stroke="#7755cc" stroke-width="1.5" marker-end="url(#arrPurple)"/>
+  <text x="275" y="220" text-anchor="middle" font-size="8" fill="#7755cc">tool_use</text>
+
+  <!-- arrow down (after tools complete) -->
+  <line x1="150" y1="252" x2="150" y2="268" stroke="#2e5299" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="166" y="263" font-size="8" fill="#2e5299">end_turn</text>
+
+  <!-- 4. Response Ready -->
+  <rect x="40" y="268" width="220" height="52" rx="6" fill="#f5f0ff" stroke="#7755cc" stroke-width="1.5"/>
+  <text x="150" y="290" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a2744">Response Ready</text>
+  <text x="150" y="306" text-anchor="middle" font-size="9" fill="#555555">Grounded in real data from tools</text>
+
+  <!-- arrow down -->
+  <line x1="150" y1="320" x2="150" y2="336" stroke="#cc3333" stroke-width="1.5" marker-end="url(#arrRed)"/>
+
+  <!-- 5. Judge -->
+  <rect x="40" y="336" width="220" height="62" rx="6" fill="#fde8e8" stroke="#cc3333" stroke-width="1.5"/>
+  <text x="150" y="358" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a2744">Judge  —  Claude Haiku</text>
+  <text x="150" y="374" text-anchor="middle" font-size="9" fill="#555555">Scores response + tool call trace</text>
+  <text x="150" y="388" text-anchor="middle" font-size="9" fill="#555555">7 behavioral properties · independent</text>
+
+  <!-- arrow down -->
+  <line x1="150" y1="398" x2="150" y2="414" stroke="#2e5299" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- 6. Verdict -->
+  <rect x="40" y="414" width="220" height="52" rx="6" fill="#d5e8f0" stroke="#2e5299" stroke-width="1.5"/>
+  <text x="150" y="436" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a2744">Verdict</text>
+  <text x="150" y="452" text-anchor="middle" font-size="9" fill="#555555">Pass/fail per non-negotiable · scores</text>
+
+  <!-- arrow: pass path right -->
+  <line x1="260" y1="440" x2="310" y2="440" stroke="#0D9488" stroke-width="1.5" marker-end="url(#arrTeal)"/>
+  <text x="285" y="434" text-anchor="middle" font-size="8" fill="#0D9488" font-weight="bold">PASS</text>
+
+  <!-- arrow: fail path (back up to agent with retry) -->
+  <path d="M 40 440 Q 20 440 20 226 Q 20 200 40 200" fill="none" stroke="#cc3333" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arrRed)"/>
+  <text x="10" y="320" text-anchor="middle" font-size="8" fill="#cc3333" transform="rotate(-90,10,320)">retry once</text>
+
+  <!-- ══════ TOOL LOOP: center column ══════ -->
+
+  <!-- Tool loop box -->
+  <rect x="290" y="180" width="290" height="200" rx="6" fill="#fffdf0" stroke="#e6a800" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="435" y="200" text-anchor="middle" font-size="10" font-weight="bold" fill="#b07800">Tool Execution Loop</text>
+  <text x="435" y="215" text-anchor="middle" font-size="9" fill="#888888">Each call: input → DB lookup → result appended</text>
+
+  <!-- Tool call 1 -->
+  <rect x="308" y="224" width="254" height="34" rx="4" fill="#fff8e1" stroke="#e6a800" stroke-width="1"/>
+  <text x="380" y="237" font-size="9" fill="#b07800" font-weight="bold">1. lookup_customer("Rodriguez", "4521")</text>
+  <text x="318" y="252" font-size="8" fill="#888888">   ← { customer: James Rodriguez, order: #4521 }</text>
+
+  <!-- Tool call 2 -->
+  <rect x="308" y="270" width="254" height="34" rx="4" fill="#fff8e1" stroke="#e6a800" stroke-width="1"/>
+  <text x="380" y="283" font-size="9" fill="#b07800" font-weight="bold">2. check_eligibility("4521")</text>
+  <text x="318" y="298" font-size="8" fill="#888888">   ← { eligible: true, days_remaining: 12 }</text>
+
+  <!-- Tool call 3 -->
+  <rect x="308" y="316" width="254" height="34" rx="4" fill="#fff8e1" stroke="#e6a800" stroke-width="1"/>
+  <text x="380" y="329" font-size="9" fill="#b07800" font-weight="bold">3. get_return_label("4521")</text>
+  <text x="318" y="344" font-size="8" fill="#888888">   ← { ref: "RTN-2024-88832", url: "..." }</text>
+
+  <!-- Arrow from tool loop back to Claude -->
+  <line x1="290" y1="310" x2="260" y2="252" stroke="#7755cc" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrPurple)"/>
+  <text x="272" y="282" text-anchor="middle" font-size="8" fill="#7755cc">results</text>
+
+  <!-- ══════ RIGHT COLUMN: Storage + Response ══════ -->
+
+  <!-- Storage (sync) -->
+  <rect x="620" y="414" width="160" height="52" rx="6" fill="#f0f0f0" stroke="#888888" stroke-width="1.5"/>
+  <text x="700" y="436" text-anchor="middle" font-size="10" font-weight="bold" fill="#1a2744">Storage (sync)</text>
+  <text x="700" y="452" text-anchor="middle" font-size="9" fill="#555555">run · session · verdict</text>
+
+  <!-- Async log (dashed) -->
+  <rect x="800" y="414" width="140" height="52" rx="6" fill="#f9f9f9" stroke="#aaaaaa" stroke-width="1.2" stroke-dasharray="5,3"/>
+  <text x="870" y="434" text-anchor="middle" font-size="10" font-weight="bold" fill="#444444">Async Log</text>
+  <text x="870" y="450" text-anchor="middle" font-size="9" fill="#888888">SQLite + JSONL</text>
+  <text x="870" y="463" text-anchor="middle" font-size="8" fill="#aaaaaa" font-style="italic">non-blocking</text>
+
+  <!-- arrow from verdict pass → storage -->
+  <line x1="530" y1="440" x2="620" y2="440" stroke="#0D9488" stroke-width="1.5" marker-end="url(#arrTeal)"/>
+
+  <!-- arrow from storage → async -->
+  <line x1="780" y1="440" x2="800" y2="440" stroke="#888888" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrGrey)"/>
+
+  <!-- Response delivered -->
+  <rect x="620" y="336" width="320" height="52" rx="6" fill="#e6faf8" stroke="#0D9488" stroke-width="1.5"/>
+  <text x="780" y="358" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a2744">Response to Customer</text>
+  <text x="780" y="374" text-anchor="middle" font-size="9" fill="#555555">"Your return label is RTN-2024-88832..."</text>
+
+  <!-- arrow from verdict → response -->
+  <line x1="530" y1="426" x2="780" y2="388" stroke="#0D9488" stroke-width="1.2" marker-end="url(#arrTeal)"/>
+
+  <!-- ══════ ANNOTATIONS ══════ -->
+
+  <!-- Conformance score badge -->
+  <rect x="620" y="270" width="320" height="52" rx="6" fill="white" stroke="#dddddd" stroke-width="1.2"/>
+  <text x="780" y="292" text-anchor="middle" font-size="10" font-weight="bold" fill="#1a2744">Conformance Score: 94%</text>
+  <text x="780" y="308" text-anchor="middle" font-size="9" fill="#555555">no_premature_refund ✓  ·  issue_acknowledged ✓  ·  resolution_matching ✓</text>
+  <!-- arrow from judge to score badge -->
+  <line x1="260" y1="367" x2="620" y2="296" stroke="#cc3333" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrRed)"/>
+  <text x="440" y="320" text-anchor="middle" font-size="8" fill="#cc3333" font-style="italic">judge verdict</text>
+
+  <!-- Legend -->
+  <line x1="40" y1="500" x2="920" y2="500" stroke="#eeeeee" stroke-width="1"/>
+  <rect x="40" y="512" width="12" height="10" fill="#f5f0ff" stroke="#7755cc" stroke-width="1"/>
+  <text x="58" y="522" font-size="9" fill="#555555">Agent reasoning</text>
+  <rect x="170" y="512" width="12" height="10" fill="#fff8e1" stroke="#e6a800" stroke-width="1"/>
+  <text x="188" y="522" font-size="9" fill="#555555">Tool execution</text>
+  <rect x="290" y="512" width="12" height="10" fill="#fde8e8" stroke="#cc3333" stroke-width="1"/>
+  <text x="308" y="522" font-size="9" fill="#555555">Judge scoring</text>
+  <rect x="400" y="512" width="12" height="10" fill="#e6faf8" stroke="#0D9488" stroke-width="1"/>
+  <text x="418" y="522" font-size="9" fill="#555555">Pass path</text>
+  <line x1="498" y1="517" x2="520" y2="517" stroke="#cc3333" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrRed)"/>
+  <text x="528" y="522" font-size="9" fill="#555555">Retry (non-negotiable fail)</text>
+  <line x1="690" y1="517" x2="712" y2="517" stroke="#888888" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrGrey)"/>
+  <text x="720" y="522" font-size="9" fill="#555555">Async log write</text>
+</svg>

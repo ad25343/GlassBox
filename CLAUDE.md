@@ -1,7 +1,9 @@
 # GlassBox — Claude Instructions
 
 ## What is GlassBox?
-GlassBox is a customer support AI with full behavioral visibility — a demonstration of what a GenAI application looks like when transparency and verifiability are built in from the start, not bolted on after.
+GlassBox is a working implementation of **spec-driven development** applied to a production GenAI application — a customer support AI with full behavioral visibility.
+
+Spec-driven development means the behavioral specification is the source of truth for everything: what the system is supposed to do, how the runtime is configured, how every response is evaluated, and how conformance is tracked over time. The spec drives the system prompt, the judge, the alerts, and the retry logic. Swapping models or changing domains requires replacing the spec and corpus — nothing else.
 
 It shows: what the model is supposed to do (behavioral spec), whether it's doing it (conformance scoring), where it drifted (drift detection over time), and what changed when you swapped models (pre/post comparison).
 
