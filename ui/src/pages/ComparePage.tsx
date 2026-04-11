@@ -217,12 +217,21 @@ function pairSnapshots(snapshots: SnapshotResponse[]): ComparePair[] {
   // Only real runs have haiku entries — synthetic history is sonnet-only
   const haikus = snapshots.filter(s => s.model.includes('haiku'))
   const sonnets = snapshots.filter(s => s.model.includes('sonnet'))
+  const usedSonnetIds = new Set<number>()
   const pairs: ComparePair[] = []
   for (const haiku of haikus) {
     const haikusMs = new Date(haiku.created_at).getTime()
-    // Find the closest sonnet run within 120 seconds
-    const match = sonnets.find(s => Math.abs(new Date(s.created_at).getTime() - haikusMs) < 120_000)
-    if (match) pairs.push({ runAt: haiku.created_at, sonnet: match, haiku })
+    // Find the closest unused sonnet run within 15 minutes
+    // (Sonnet can finish several minutes after Haiku when run concurrently)
+    const candidates = sonnets
+      .filter(s => s.id != null && !usedSonnetIds.has(s.id!))
+      .filter(s => Math.abs(new Date(s.created_at).getTime() - haikusMs) < 900_000)
+      .sort((a, b) => Math.abs(new Date(a.created_at).getTime() - haikusMs) - Math.abs(new Date(b.created_at).getTime() - haikusMs))
+    const match = candidates[0]
+    if (match) {
+      usedSonnetIds.add(match.id!)
+      pairs.push({ runAt: haiku.created_at, sonnet: match, haiku })
+    }
   }
   return pairs.sort((a, b) => new Date(b.runAt).getTime() - new Date(a.runAt).getTime())
 }
