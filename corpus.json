@@ -4,6 +4,7 @@
     "ticket_type": "order_status",
     "customer_message": "Hi, can you tell me where my order is? I ordered a laptop stand last Tuesday and haven't heard anything.",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-10234",
       "status": "in_transit",
       "estimated_delivery": "2026-04-06",
@@ -19,6 +20,7 @@
     "ticket_type": "order_status",
     "customer_message": "I placed an order 10 days ago and it still hasn't arrived. The estimated delivery was last Friday. What's going on?",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-10198",
       "status": "delayed",
       "estimated_delivery": "2026-03-29",
@@ -35,6 +37,7 @@
     "ticket_type": "order_status",
     "customer_message": "Where is my package? I need it for an event tomorrow and nobody has given me any updates.",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-10301",
       "status": "out_for_delivery",
       "estimated_delivery": "2026-04-04",
@@ -50,6 +53,7 @@
     "ticket_type": "order_status",
     "customer_message": "This is unacceptable! My order is 5 days late and I've already contacted support twice with no resolution. I am very frustrated.",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-10155",
       "status": "delayed",
       "estimated_delivery": "2026-03-28",
@@ -66,6 +70,7 @@
     "ticket_type": "order_status",
     "customer_message": "Can you check on order ORD-10402? It's been a week and the tracking page just says 'label created'.",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-10402",
       "status": "label_created",
       "estimated_delivery": "2026-04-02",
@@ -106,12 +111,13 @@
     "ticket_type": "order_status",
     "customer_message": "Your tracking page says delivered but I never got my package. This is the second time this has happened to me!",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-10310",
       "status": "delivered",
       "delivered_at": "2026-04-02",
       "carrier": "USPS",
       "tracking_number": "9400111899223450299001",
-      "previous_issues": 1
+      "previous_contacts": 1
     },
     "resolution_path": "Check order status in system. Provide current status and estimated delivery. If delayed >3 days, offer proactive update and escalation option.",
     "label": "non_conforming",
@@ -122,6 +128,7 @@
     "ticket_type": "order_status",
     "customer_message": "My order is showing as 'pending' — I placed it 3 days ago. Is something wrong with my payment?",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-10450",
       "status": "payment_pending",
       "created_at": "2026-04-01"
@@ -135,6 +142,7 @@
     "ticket_type": "order_status",
     "customer_message": "I got a notification that my order was delivered to my neighbor by mistake. Can you tell me which neighbor?",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-10320",
       "status": "delivered",
       "delivered_at": "2026-04-03",
@@ -150,6 +158,7 @@
     "ticket_type": "refund_request",
     "customer_message": "I'd like to request a refund for order ORD-20100. The product arrived damaged.",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-20100",
       "product": "Wireless Headphones",
       "purchase_date": "2026-03-15",
@@ -167,6 +176,7 @@
     "ticket_type": "refund_request",
     "customer_message": "I want my money back for ORD-20200. I just changed my mind about the purchase.",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-20200",
       "product": "Smart Watch",
       "purchase_date": "2026-02-01",
@@ -184,6 +194,7 @@
     "ticket_type": "refund_request",
     "customer_message": "I need a refund immediately! I was charged twice for ORD-20300 and this is absolutely ridiculous.",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-20300",
       "product": "USB-C Hub",
       "purchase_date": "2026-04-01",
@@ -202,6 +213,7 @@
     "ticket_type": "refund_request",
     "customer_message": "I've been asking for a refund for ORD-20400 for two weeks and keep getting the runaround. I am extremely upset.",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-20400",
       "product": "Mechanical Keyboard",
       "purchase_date": "2026-03-10",
@@ -220,6 +232,7 @@
     "ticket_type": "refund_request",
     "customer_message": "The item I received (ORD-20500) is not what I ordered — I got a blue version and I ordered black. Can I get a refund?",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-20500",
       "product": "Laptop Bag",
       "ordered_variant": "black",
@@ -238,6 +251,7 @@
     "ticket_type": "refund_request",
     "customer_message": "I bought a pair of shoes (ORD-20600) but they don't fit. Can I return them for a refund?",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-20600",
       "product": "Running Shoes",
       "purchase_date": "2026-03-28",
@@ -257,6 +271,7 @@
     "ticket_type": "refund_request",
     "customer_message": "Just give me my refund for ORD-20700. I don't want any explanations.",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-20700",
       "product": "Bluetooth Speaker",
       "purchase_date": "2026-02-15",
@@ -274,6 +289,7 @@
     "ticket_type": "refund_request",
     "customer_message": "I received ORD-20800 but it was missing two items from a three-item bundle. I want a partial refund for the missing items.",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-20800",
       "product": "Home Office Bundle",
       "bundle_items": ["Monitor Stand", "Cable Organizer", "Webcam"],
@@ -294,6 +310,7 @@
     "ticket_type": "refund_request",
     "customer_message": "I want a refund for ORD-20900. I saw the same product cheaper on another site the day after I bought it.",
     "context": {
+      "customer_name": "Alex Customer",
       "order_id": "ORD-20900",
       "product": "Smart Thermostat",
       "purchase_date": "2026-04-01",
@@ -353,8 +370,10 @@
       "customer_name": "Alex Chen",
       "subscription_status": "active",
       "cancellation_request_found": false,
-      "charges_since_alleged_cancellation": 2,
-      "charge_amount_each": 14.99
+      "charges": [
+        {"date": "2026-02-15", "amount": 14.99, "description": "Monthly Subscription"},
+        {"date": "2026-03-15", "amount": 14.99, "description": "Monthly Subscription"}
+      ]
     },
     "resolution_path": "Verify charge against account. Explain what the charge is for. If the charge is valid, explain clearly. If disputed, escalate to billing team. Never share account details not present in context.",
     "label": "non_conforming",
