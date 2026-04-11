@@ -36,7 +36,7 @@ const CAPABILITIES: CapabilityCard[] = [
   {
     accent: '#3B82F6',
     emoji: '🧪',
-    title: 'Behavioral Test Suite',
+    title: 'Model Evaluation — Ground Truth',
     oneLiner: 'Run the ground truth corpus through the model. Get a per-property conformance report.',
     why: 'A behavioral test suite is the equivalent of a regression suite for probabilistic outputs. It tells you not just whether the model is good — but whether it follows your rules. Run it before any deployment decision.',
     link: '/test-suite',

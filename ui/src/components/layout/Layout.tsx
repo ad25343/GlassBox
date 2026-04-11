@@ -16,7 +16,7 @@ const nav = [
   { to: '/',           icon: Home,          label: 'Home' },
   { to: '/spec',       icon: ShieldCheck,   label: 'Behavioral Spec' },
   { to: '/runtime',    icon: MessageSquare, label: 'Live Runtime' },
-  { to: '/test-suite', icon: FlaskConical,  label: 'Test Suite' },
+  { to: '/test-suite', icon: FlaskConical,  label: 'Model Evaluation' },
   { to: '/drift',      icon: TrendingUp,    label: 'Baseline & Drift' },
   { to: '/compare',    icon: Scale,         label: 'Model Comparison' },
   { to: '/monitor',    icon: Activity,      label: 'Production Monitor' },

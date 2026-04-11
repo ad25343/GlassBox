@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Play, Bookmark, CheckCircle2, AlertTriangle, Loader2, ChevronRight, ChevronDown } from 'lucide-react'
+import { Play, Bookmark, CheckCircle2, AlertTriangle, Loader2, ChevronRight, ChevronDown, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { InfoTooltip, ScoreTooltip, PROPERTY_DESCRIPTIONS } from '@/components/ui/score-tooltip'
 import { cn } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getSnapshots, triggerSnapshot, getSnapshotExamples, type SnapshotResponse, type SnapshotExampleItem } from '@/lib/api'
+import { getSnapshots, triggerSnapshot, getSnapshotExamples, deleteSnapshot, type SnapshotResponse, type SnapshotExampleItem } from '@/lib/api'
 
 interface PropertyConfig {
   id: string
@@ -122,6 +122,14 @@ export default function TestSuitePage() {
 
   const isRunning = runMutation.isPending
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteSnapshot(id),
+    onSuccess: (_data, deletedId) => {
+      if (selectedSnapshotId === deletedId) setSelectedSnapshotId(null)
+      queryClient.invalidateQueries({ queryKey: ['snapshots', 'test'] })
+    },
+  })
+
   const { data: examples } = useQuery({
     queryKey: ['snapshot-examples', snapshot?.id],
     queryFn: () => getSnapshotExamples(snapshot!.id!),
@@ -136,7 +144,7 @@ export default function TestSuitePage() {
     <div className="flex flex-col h-full">
       {/* Page header */}
       <div className="px-6 pt-6 pb-0 border-b">
-        <h1 className="text-xl font-semibold">Test Suite</h1>
+        <h1 className="text-xl font-semibold">Model Evaluation — Ground Truth</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Run the ground truth corpus through the model. Get a per-property conformance report.
         </p>
@@ -222,7 +230,7 @@ export default function TestSuitePage() {
                         key={s.id}
                         onClick={() => setSelectedSnapshotId(s.id)}
                         className={cn(
-                          'border-b last:border-0 cursor-pointer transition-colors',
+                          'group border-b last:border-0 cursor-pointer transition-colors',
                           isSelected ? 'bg-muted/30' : 'hover:bg-muted/20'
                         )}
                         style={isSelected ? { borderLeft: '3px solid #0D9488' } : { borderLeft: '3px solid transparent' }}
@@ -247,9 +255,16 @@ export default function TestSuitePage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {isSelected ? (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground inline" />
-                          ) : null}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (s.id != null) deleteMutation.mutate(s.id)
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-100 hover:text-rose-600 transition-all"
+                            title="Delete this run"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </td>
                       </tr>
                     )
@@ -558,7 +573,7 @@ export default function TestSuitePage() {
         {/* Internals tab */}
         {activeTab === 'internals' && (
           <div className="bg-card rounded-lg border border-border p-4 space-y-6">
-            <h2 className="text-sm font-semibold">How the Test Suite Works</h2>
+            <h2 className="text-sm font-semibold">How Model Evaluation Works</h2>
 
             {/* Section A — The Corpus */}
             <div>
