@@ -306,7 +306,7 @@ function NarrativePanel({ summary, sections, result }: { summary: string; sectio
 
 export default function ComparePage() {
   const [showInternals, setShowInternals] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
+  const [showHistory, setShowHistory] = useState(true)
   const queryClient = useQueryClient()
 
   const [isRunning, setIsRunning] = useState(false)
@@ -345,7 +345,8 @@ export default function ComparePage() {
   const comparePairs = snapshotsQuery.data ? pairSnapshots(snapshotsQuery.data) : []
   const latestPairResult = comparePairs.length > 0 ? compareResponseFromPair(comparePairs[0]) : null
 
-  const displayResult: CompareResponse | null = compareResult
+  // Show the freshly-run result first; fall back to latest historical pair
+  const displayResult: CompareResponse | null = compareResult ?? latestPairResult
 
   return (
     <div className="flex flex-col h-full">
@@ -388,6 +389,13 @@ export default function ComparePage() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+        {!isRunning && !displayResult && comparePairs.length === 0 && !snapshotsQuery.isLoading && (
+          <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+            <p className="font-medium text-foreground mb-1">No comparison runs yet</p>
+            <p>Click <strong>Run Comparison</strong> to evaluate Sonnet vs Haiku on the same 36-example corpus.</p>
+          </div>
+        )}
 
         {isRunning && (
           <div className="rounded-lg border p-4 text-sm text-muted-foreground flex items-center gap-3" style={{ borderColor: '#0D9488', backgroundColor: '#0D944811' }}>
