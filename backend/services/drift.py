@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from backend.core import db
 from backend.core.config import Settings
 from backend.core.logging import get_logger
+from backend.services.corpus_tools import make_corpus_tool_executor
 
 logger = get_logger(__name__)
 
@@ -176,12 +177,14 @@ class DriftEngine:
 
         for example in corpus:
             try:
+                corpus_executor = make_corpus_tool_executor(example.get("context", {}))
                 result = await runtime.handle_ticket(
                     customer_message=example["customer_message"],
                     ticket_type=example["ticket_type"],
                     context=example.get("context", {}),
                     model=model,
-                    use_tools=False,  # corpus context is pre-loaded; corpus test data not in prod DB
+                    use_tools=True,
+                    tool_executor=corpus_executor,
                 )
                 total_input_tokens += result.input_tokens
                 total_output_tokens += result.output_tokens

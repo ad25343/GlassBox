@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any
+from typing import Any, Callable
 
 import anthropic
 from pydantic import BaseModel
@@ -209,6 +209,7 @@ class CustomerSupportRuntime:
         session_id: str | None = None,
         scenario_id: str = "",
         use_tools: bool = True,
+        tool_executor: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None,
     ) -> RunResult:
         effective_model = model or self._config.PRODUCTION_MODEL
         spec = self._load_spec()
@@ -248,6 +249,7 @@ class CustomerSupportRuntime:
                     system_prompt=system_prompt,
                     customer_message=customer_message,
                     conversation_history=conversation_history,
+                    tool_executor=tool_executor,
                 )
             else:
                 response, input_tokens, output_tokens = await self._call_model(
@@ -284,6 +286,7 @@ class CustomerSupportRuntime:
                             system_prompt=retry_system_prompt,
                             customer_message=customer_message,
                             conversation_history=conversation_history,
+                            tool_executor=tool_executor,
                         )
                     )
                     tool_calls = tool_calls + retry_tool_calls

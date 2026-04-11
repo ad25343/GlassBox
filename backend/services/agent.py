@@ -8,7 +8,7 @@ The tool_call_trace is a list of dicts recording every tool invoked during the t
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Callable
 
 import anthropic
 
@@ -33,6 +33,7 @@ class AgentService:
         system_prompt: str,
         customer_message: str,
         conversation_history: list[dict[str, Any]] | None = None,
+        tool_executor: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None,
     ) -> tuple[str, list[dict[str, Any]], int, int]:
         """
         Run one complete agent turn: customer message → tools → response.
@@ -105,7 +106,8 @@ class AgentService:
                         continue
 
                     tool_call_count += 1
-                    result = execute_tool(block.name, block.input)
+                    _exec = tool_executor if tool_executor is not None else execute_tool
+                    result = _exec(block.name, block.input)
 
                     tool_calls.append(
                         {
