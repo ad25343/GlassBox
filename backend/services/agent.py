@@ -63,6 +63,7 @@ class AgentService:
             response = await self._client.messages.create(
                 model=model,
                 max_tokens=1024,
+                temperature=0,
                 system=system_prompt,
                 tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
                 messages=messages,
@@ -155,6 +156,7 @@ class AgentService:
         final = await self._client.messages.create(
             model=model,
             max_tokens=1024,
+            temperature=0,
             system=system_prompt,
             messages=messages,
             # No tools parameter → model must respond with text

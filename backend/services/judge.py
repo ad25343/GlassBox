@@ -199,6 +199,7 @@ class JudgeService:
             message = await self._client.messages.create(
                 model=self._model,
                 max_tokens=1024,
+                temperature=0,
                 system=_JUDGE_SYSTEM,
                 messages=[{"role": "user", "content": user_prompt}],
             )
