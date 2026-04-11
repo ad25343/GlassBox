@@ -123,7 +123,8 @@ export default function TestSuitePage() {
     ? (modelSnapshots.find((s) => s.id === effectiveSnapshotId) ?? modelSnapshots[modelSnapshots.length - 1])
     : null
 
-  const isRunning = runMutation.isPending
+  const { startEval, stopEval, isEvalRunning } = useEvalRun()
+  const isRunning = runMutation.isPending || isEvalRunning
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteSnapshot(id),
@@ -142,7 +143,6 @@ const { data: examples } = useQuery({
   const [expandedProp, setExpandedProp] = useState<string | null>(null)
   const [expandedNn, setExpandedNn] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'results' | 'internals'>('results')
-  const { startEval, stopEval } = useEvalRun()
 
   return (
     <div className="flex flex-col h-full">
