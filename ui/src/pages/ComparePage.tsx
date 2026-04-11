@@ -306,20 +306,30 @@ function NarrativePanel({ summary, sections, result }: { summary: string; sectio
 
 export default function ComparePage() {
   const [showInternals, setShowInternals] = useState(false)
-  const [showHistory, setShowHistory] = useState(true)
+  const [selectedPairIdx, setSelectedPairIdx] = useState<number | null>(null)
   const queryClient = useQueryClient()
 
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
-  const [compareResult, setCompareResult] = useState<CompareResponse | null>(null)
+
+  const snapshotsQuery = useQuery({
+    queryKey: ['snapshots', 'compare'],
+    queryFn: () => getSnapshots('compare'),
+    staleTime: 0,
+  })
+  const comparePairs = snapshotsQuery.data ? pairSnapshots(snapshotsQuery.data) : []
+
+  // Always default to showing the latest pair; selectedPairIdx overrides
+  const activePair = selectedPairIdx !== null ? comparePairs[selectedPairIdx] : comparePairs[0] ?? null
+  const displayResult: CompareResponse | null = activePair ? compareResponseFromPair(activePair) : null
 
   const handleRun = async () => {
     setIsRunning(true)
     setRunError(null)
     try {
-      const data = await compareModels()
-      setCompareResult(data)
-      queryClient.invalidateQueries({ queryKey: ['snapshots'] })
+      await compareModels()
+      await queryClient.invalidateQueries({ queryKey: ['snapshots', 'compare'] })
+      setSelectedPairIdx(null) // reset to latest
     } catch (e) {
       setRunError(e instanceof Error ? e.message : 'Unknown error — check server logs.')
     } finally {
@@ -334,19 +344,11 @@ export default function ComparePage() {
         pair.haiku.id != null ? deleteSnapshot(pair.haiku.id) : Promise.resolve(),
       ])
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['snapshots'] }),
+    onSuccess: () => {
+      setSelectedPairIdx(null)
+      queryClient.invalidateQueries({ queryKey: ['snapshots', 'compare'] })
+    },
   })
-
-  const snapshotsQuery = useQuery({
-    queryKey: ['snapshots'],
-    queryFn: () => getSnapshots('compare'),
-    staleTime: 30_000,
-  })
-  const comparePairs = snapshotsQuery.data ? pairSnapshots(snapshotsQuery.data) : []
-  const latestPairResult = comparePairs.length > 0 ? compareResponseFromPair(comparePairs[0]) : null
-
-  // Show the freshly-run result first; fall back to latest historical pair
-  const displayResult: CompareResponse | null = compareResult ?? latestPairResult
 
   return (
     <div className="flex flex-col h-full">
@@ -420,7 +422,7 @@ export default function ComparePage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Results</p>
               <button
                 className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                onClick={() => setCompareResult(null)}
+                onClick={() => setSelectedPairIdx(null)}
                 title="Clear results"
               >
                 <X className="h-3.5 w-3.5" />
@@ -656,7 +658,7 @@ export default function ComparePage() {
                     <div key={i} className="flex items-center group">
                       <button
                         className="flex-1 flex items-center justify-between px-4 py-3 text-sm hover:bg-muted/30 transition-colors text-left"
-                        onClick={() => setCompareResult(compareResponseFromPair(pair))}
+                        onClick={() => setSelectedPairIdx(i)}
                       >
                         <div className="flex items-center gap-3">
                           <span className="text-muted-foreground font-mono text-xs">
