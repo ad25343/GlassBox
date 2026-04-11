@@ -143,6 +143,7 @@ class SnapshotResponse(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     run_type: str = "baseline"
+    is_pinned_baseline: bool = False
 
 
 class SnapshotExampleItem(BaseModel):

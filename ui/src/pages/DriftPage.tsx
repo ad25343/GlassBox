@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { RefreshCw, Loader2, TrendingUp, TrendingDown, Minus, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { TrendingUp, TrendingDown, Minus, X, ChevronDown, ChevronUp, Settings2, Check, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getSnapshots,
   getSnapshotDiff,
-  triggerSnapshot,
+  getSpec,
+  updateThresholds,
   type SnapshotResponse,
   type SnapshotDiffResponse,
   type ExampleDiffEntry,
@@ -34,7 +35,16 @@ interface PropertyConfig {
   color: string
 }
 
-const PROPERTY_CONFIGS: PropertyConfig[] = [
+// Static display config (colors + display names) — targets come from spec
+const PROPERTY_META: Record<string, { displayName: string; color: string }> = {
+  issue_acknowledged: { displayName: 'Issue Acknowledged', color: '#0D9488' },
+  resolution_matching: { displayName: 'Resolution Matching', color: '#3B82F6' },
+  professional_tone:   { displayName: 'Professional Tone',  color: '#8B5CF6' },
+  concise_response:    { displayName: 'Concise Response',   color: '#F59E0B' },
+}
+
+// Fallback if spec hasn't loaded yet
+const DEFAULT_PROPERTY_CONFIGS: PropertyConfig[] = [
   { id: 'issue_acknowledged', displayName: 'Issue Acknowledged', target: 0.95, alertThreshold: 0.85, color: '#0D9488' },
   { id: 'resolution_matching', displayName: 'Resolution Matching', target: 0.90, alertThreshold: 0.80, color: '#3B82F6' },
   { id: 'professional_tone', displayName: 'Professional Tone', target: 0.90, alertThreshold: 0.80, color: '#8B5CF6' },
@@ -265,17 +275,17 @@ function DeltaBadge({ delta }: { delta: number }) {
   const pp = Math.abs(delta * 100).toFixed(1)
   if (delta > 0.005) return (
     <span className="flex items-center gap-0.5 text-xs font-mono" style={{ color: '#0D9488' }}>
-      <TrendingUp className="h-3 w-3" />+{pp}pp vs baseline
+      <TrendingUp className="h-3 w-3" />+{pp}pp vs target
     </span>
   )
   if (delta < -0.005) return (
     <span className="flex items-center gap-0.5 text-xs font-mono" style={{ color: '#F43F5E' }}>
-      <TrendingDown className="h-3 w-3" />−{pp}pp vs baseline
+      <TrendingDown className="h-3 w-3" />−{pp}pp vs target
     </span>
   )
   return (
     <span className="flex items-center gap-0.5 text-xs font-mono text-muted-foreground">
-      <Minus className="h-3 w-3" />Stable vs baseline
+      <Minus className="h-3 w-3" />On target
     </span>
   )
 }
@@ -342,24 +352,65 @@ export default function DriftPage() {
   const queryClient = useQueryClient()
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [selectedSnapIdx, setSelectedSnapIdx] = useState<number | null>(null)
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-5')
+  const [editingThresholds, setEditingThresholds] = useState(false)
+  const [draftThresholds, setDraftThresholds] = useState<Record<string, { target: number; alert_threshold: number }>>({})
 
-  const { data: snapshots, isLoading: snapshotsLoading } = useQuery({
-    queryKey: ['snapshots'],
-    queryFn: () => getSnapshots('baseline'),
+  const { data: allSnapshots, isLoading: snapshotsLoading } = useQuery({
+    queryKey: ['snapshots', 'test'],
+    queryFn: () => getSnapshots('test'),
   })
 
-  const runMutation = useMutation({
-    mutationFn: () => triggerSnapshot('claude-sonnet-4-5', 'baseline'),
+  // Filter to the selected model
+  const snapshots = allSnapshots?.filter((s) => s.model === selectedModel)
+
+  const { data: spec } = useQuery({
+    queryKey: ['spec'],
+    queryFn: getSpec,
+  })
+
+  // Derive live property configs from spec, falling back to defaults
+  const PROPERTY_CONFIGS: PropertyConfig[] = spec?.behavioral_properties
+    ? spec.behavioral_properties.map((p) => ({
+        id: p.id,
+        displayName: PROPERTY_META[p.id]?.displayName ?? p.name,
+        target: p.target,
+        alertThreshold: p.alert_threshold,
+        color: PROPERTY_META[p.id]?.color ?? '#9ca3af',
+      }))
+    : DEFAULT_PROPERTY_CONFIGS
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      updateThresholds(
+        PROPERTY_CONFIGS.map((p) => ({
+          id: p.id,
+          target: draftThresholds[p.id]?.target ?? p.target,
+          alert_threshold: draftThresholds[p.id]?.alert_threshold ?? p.alertThreshold,
+        }))
+      ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['snapshots'] })
+      queryClient.invalidateQueries({ queryKey: ['spec'] })
+      setEditingThresholds(false)
+      setDraftThresholds({})
     },
   })
 
-  const isRunning = runMutation.isPending
+  // Sync draft from spec when opening editor
+  useEffect(() => {
+    if (editingThresholds) {
+      const draft: Record<string, { target: number; alert_threshold: number }> = {}
+      for (const p of PROPERTY_CONFIGS) {
+        draft[p.id] = { target: p.target, alert_threshold: p.alertThreshold }
+      }
+      setDraftThresholds(draft)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingThresholds])
+
   const chronological = snapshots ? [...snapshots].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   ) : []
-  const baseline = chronological[0] ?? null
   const current = chronological[chronological.length - 1] ?? null
   const hasHistory = chronological.length >= 2
 
@@ -380,34 +431,125 @@ export default function DriftPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Page header */}
-      <div className="p-6 border-b flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Baseline &amp; Drift</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Is the model behaving the same way it did when you last set a baseline?
+      <div className="p-6 border-b">
+        <h1 className="text-xl font-semibold">Baseline &amp; Drift</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Is the model hitting its targets? How has it trended over time?
+        </p>
+        <div className="flex items-center gap-3 mt-3">
+          <select
+            value={selectedModel}
+            onChange={(e) => { setSelectedModel(e.target.value); setSelectedSnapIdx(null) }}
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 hover:border-foreground/30 hover:bg-muted/30 transition-colors cursor-pointer"
+          >
+            <option value="claude-sonnet-4-5">claude-sonnet-4-5</option>
+            <option value="claude-haiku-4-5">claude-haiku-4-5</option>
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Runs triggered from{' '}
+            <a href="/test-suite" className="underline underline-offset-2 hover:text-foreground transition-colors">
+              Model Evaluation
+            </a>
           </p>
         </div>
-        <Button
-          className="text-white mt-1"
-          style={{ backgroundColor: '#0D9488' }}
-          onClick={() => runMutation.mutate()}
-          disabled={isRunning}
-        >
-          {isRunning ? (
-            <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Running...</>
-          ) : (
-            <><RefreshCw className="h-4 w-4 mr-1.5" />Run Now</>
-          )}
-        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
-        {/* ── Section 1: Current vs. Baseline ─────────────────────────────── */}
+        {/* ── Passing Thresholds ───────────────────────────────────────────── */}
+        <Card>
+          <CardHeader className="border-b pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                Passing Thresholds
+                <InfoTooltip text="The score each property must reach to be considered passing. Edit these to match your quality bar — they're saved to the behavioral spec." />
+              </CardTitle>
+              {!editingThresholds ? (
+                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => setEditingThresholds(true)}>
+                  <Settings2 className="h-3.5 w-3.5" />Edit
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setEditingThresholds(false); setDraftThresholds({}) }}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" className="h-7 gap-1.5 text-xs text-white" style={{ backgroundColor: '#0D9488' }}
+                    onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+                    {saveMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    Save
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Property</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target (A grade)</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Alert threshold</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PROPERTY_CONFIGS.map((prop) => {
+                  const draft = draftThresholds[prop.id]
+                  const targetVal = draft?.target ?? prop.target
+                  const alertVal = draft?.alert_threshold ?? prop.alertThreshold
+                  return (
+                    <tr key={prop.id} className="border-b last:border-0">
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-xs" style={{ color: prop.color }}>{prop.displayName}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {editingThresholds ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number" min={0} max={100} step={1}
+                              value={Math.round(targetVal * 100)}
+                              onChange={(e) => setDraftThresholds((d) => ({
+                                ...d,
+                                [prop.id]: { target: Number(e.target.value) / 100, alert_threshold: d[prop.id]?.alert_threshold ?? prop.alertThreshold }
+                              }))}
+                              className="w-16 rounded border border-border bg-background px-2 py-1 text-xs font-mono text-center focus:outline-none focus:ring-1"
+                            />
+                            <span className="text-xs text-muted-foreground">%</span>
+                          </div>
+                        ) : (
+                          <span className="font-mono text-xs font-semibold" style={{ color: '#0D9488' }}>{(prop.target * 100).toFixed(0)}%</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {editingThresholds ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number" min={0} max={100} step={1}
+                              value={Math.round(alertVal * 100)}
+                              onChange={(e) => setDraftThresholds((d) => ({
+                                ...d,
+                                [prop.id]: { target: d[prop.id]?.target ?? prop.target, alert_threshold: Number(e.target.value) / 100 }
+                              }))}
+                              className="w-16 rounded border border-border bg-background px-2 py-1 text-xs font-mono text-center focus:outline-none focus:ring-1"
+                            />
+                            <span className="text-xs text-muted-foreground">%</span>
+                          </div>
+                        ) : (
+                          <span className="font-mono text-xs" style={{ color: '#F59E0B' }}>{(prop.alertThreshold * 100).toFixed(0)}%</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+
+        {/* ── Section 1: Current vs. Target ───────────────────────────────── */}
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-            Current vs. Baseline
-            <InfoTooltip text="Baseline = the earliest snapshot in history. Current = most recent run. Delta shows how much each property has moved since you started tracking." />
+            Current vs. Target
+            <InfoTooltip text="Target = the passing threshold for each property (defined in the behavioral spec). Delta shows how much the latest run is above or below the target." />
           </p>
           {snapshotsLoading ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -415,14 +557,13 @@ export default function DriftPage() {
             </div>
           ) : !current ? (
             <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              No snapshots yet. Click <strong>Run Now</strong> to capture the first baseline.
+              No runs yet for this model. Go to <a href="/test-suite" className="underline underline-offset-2 hover:text-foreground">Model Evaluation</a> to run the test suite.
             </div>
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {PROPERTY_CONFIGS.map((prop) => {
                 const curr = getScore(current, prop.id, activeCategory)
-                const base = baseline ? getScore(baseline, prop.id, activeCategory) : curr
-                const delta = curr - base
+                const delta = curr - prop.target
                 const color = scoreColor(curr, prop.target, prop.alertThreshold)
                 return (
                   <Card key={prop.id}>
@@ -436,6 +577,7 @@ export default function DriftPage() {
                       <p className="text-2xl font-semibold font-mono" style={{ color }}>
                         {(curr * 100).toFixed(1)}%
                       </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">target: {(prop.target * 100).toFixed(0)}%</p>
                       <div className="mt-1">
                         <DeltaBadge delta={delta} />
                       </div>

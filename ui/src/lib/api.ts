@@ -96,6 +96,7 @@ export interface SnapshotResponse {
   category_scores: Record<string, Record<string, number>>
   input_tokens: number
   output_tokens: number
+  is_pinned_baseline: boolean
 }
 
 // Per-example result stored for each snapshot run
@@ -244,6 +245,11 @@ export async function deleteSnapshot(id: number): Promise<void> {
   await fetch(`${BASE}/api/v1/runs/snapshot/${id}`, { method: 'DELETE' })
 }
 
+// Pin a snapshot as the baseline
+export async function pinSnapshot(id: number): Promise<SnapshotResponse> {
+  return apiFetch<SnapshotResponse>(`/api/v1/runs/snapshot/${id}/pin`, { method: 'POST' })
+}
+
 // Get incidents
 export async function getIncidents(): Promise<IncidentResponse[]> {
   return apiFetch<IncidentResponse[]>('/api/v1/runs/incidents')
@@ -301,6 +307,16 @@ export interface BehavioralSpec {
 // Get the behavioral spec
 export async function getSpec(): Promise<BehavioralSpec> {
   return apiFetch<BehavioralSpec>('/api/v1/spec')
+}
+
+// Update per-property passing thresholds in spec.json
+export async function updateThresholds(
+  properties: { id: string; target: number; alert_threshold: number }[]
+): Promise<BehavioralSpec> {
+  return apiFetch<BehavioralSpec>('/api/v1/spec/thresholds', {
+    method: 'PATCH',
+    body: JSON.stringify({ behavioral_properties: properties }),
+  })
 }
 
 // Get a full session (conversation thread + turns)

@@ -67,6 +67,25 @@ async def delete_snapshot(snapshot_id: int) -> Response:
     return Response(status_code=204)
 
 
+@router.post("/snapshot/{snapshot_id}/pin", response_model=Envelope[SnapshotResponse])
+async def pin_snapshot(snapshot_id: int) -> Envelope[SnapshotResponse]:
+    from backend.core import db as _db
+    rows = _db.get_snapshots()
+    target = next((r for r in rows if r["id"] == snapshot_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"Snapshot {snapshot_id} not found")
+    _db.pin_snapshot_as_baseline(snapshot_id)
+    target["is_pinned_baseline"] = True
+    return Envelope(data=SnapshotResponse(**target), meta={"pinned": snapshot_id})
+
+
+@router.delete("/snapshot/{snapshot_id}/pin")
+async def unpin_snapshot(snapshot_id: int) -> Response:
+    from backend.core import db as _db
+    _db.unpin_baseline()
+    return Response(status_code=204)
+
+
 @router.get("/snapshots/{snapshot_id}/examples", response_model=Envelope[list[SnapshotExampleItem]])
 async def get_snapshot_examples(snapshot_id: int) -> Envelope[list[SnapshotExampleItem]]:
     from backend.core import db as _db

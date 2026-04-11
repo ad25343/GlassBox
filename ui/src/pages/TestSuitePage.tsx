@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Play, Bookmark, CheckCircle2, AlertTriangle, Loader2, ChevronRight, ChevronDown, Trash2 } from 'lucide-react'
+import { Play, CheckCircle2, AlertTriangle, Loader2, ChevronRight, ChevronDown, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -133,7 +133,7 @@ export default function TestSuitePage() {
     },
   })
 
-  const { data: examples } = useQuery({
+const { data: examples } = useQuery({
     queryKey: ['snapshot-examples', snapshot?.id],
     queryFn: () => getSnapshotExamples(snapshot!.id!),
     enabled: snapshot?.id != null,
@@ -258,7 +258,14 @@ export default function TestSuitePage() {
                         style={isSelected ? { borderLeft: '3px solid #0D9488' } : { borderLeft: '3px solid transparent' }}
                       >
                         <td className="px-4 py-3">
-                          <p className="font-medium">{new Date(s.created_at).toLocaleDateString()}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{new Date(s.created_at).toLocaleDateString()}</p>
+                            {s.is_pinned_baseline && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider text-white" style={{ backgroundColor: '#0D9488' }}>
+                                Baseline
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleTimeString()}</p>
                         </td>
                         <td className="px-4 py-3">

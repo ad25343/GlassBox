@@ -68,6 +68,10 @@ MIGRATE_SNAPSHOTS_ADD_RUN_TYPE = """
 ALTER TABLE baseline_snapshots ADD COLUMN run_type TEXT NOT NULL DEFAULT 'baseline'
 """
 
+MIGRATE_SNAPSHOTS_ADD_PINNED_BASELINE = """
+ALTER TABLE baseline_snapshots ADD COLUMN is_pinned_baseline INTEGER NOT NULL DEFAULT 0
+"""
+
 CREATE_CONFORMANCE_RESULTS = """
 CREATE TABLE IF NOT EXISTS conformance_results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -266,6 +270,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "run_type" not in snap_cols:
         logger.info("migrating baseline_snapshots — adding run_type")
         conn.execute(MIGRATE_SNAPSHOTS_ADD_RUN_TYPE)
+    if "is_pinned_baseline" not in snap_cols:
+        logger.info("migrating baseline_snapshots — adding is_pinned_baseline")
+        conn.execute(MIGRATE_SNAPSHOTS_ADD_PINNED_BASELINE)
     existing_tables = {
         row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     }
@@ -660,8 +667,29 @@ def get_snapshots(run_type: str | None = None) -> list[dict[str, Any]]:
         d.setdefault("input_tokens", 0)
         d.setdefault("output_tokens", 0)
         d.setdefault("run_type", "baseline")
+        d["is_pinned_baseline"] = bool(d.get("is_pinned_baseline", 0))
         results.append(d)
     return results
+
+
+def pin_snapshot_as_baseline(snapshot_id: int) -> None:
+    """Pin a snapshot as the canonical baseline. Clears any existing pin first."""
+    with get_db() as conn:
+        conn.execute("UPDATE baseline_snapshots SET is_pinned_baseline = 0")
+        conn.execute(
+            "UPDATE baseline_snapshots SET is_pinned_baseline = 1 WHERE id = ?",
+            (snapshot_id,),
+        )
+        conn.commit()
+    logger.info("pinned baseline snapshot", snapshot_id=snapshot_id)
+
+
+def unpin_baseline() -> None:
+    """Remove the baseline pin from all snapshots."""
+    with get_db() as conn:
+        conn.execute("UPDATE baseline_snapshots SET is_pinned_baseline = 0")
+        conn.commit()
+    logger.info("unpinned baseline")
 
 
 def _deserialize_run(d: dict[str, Any]) -> dict[str, Any]:
