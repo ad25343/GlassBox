@@ -99,30 +99,49 @@ def make_corpus_tool_executor(
         }
 
     def _get_billing_charges(customer_id: str) -> dict[str, Any]:  # noqa: ARG001
-        if "charge_amount" not in context:
-            return {
-                "found": False,
-                "customer_id": customer_id,
-                "message": "No billing charges found for this customer.",
-            }
-        charge_type = (
-            "subscription"
-            if "subscription" in context.get("charge_description", "").lower()
-            else "purchase"
-        )
-        return {
-            "found": True,
-            "customer_id": customer_id,
-            "charges": [
+        # Handle multi-charge array format: {"charges": [{"date", "amount", "description"}, ...]}
+        if "charges" in context and isinstance(context["charges"], list):
+            charges = [
                 {
-                    "id": "CHG-001",
+                    "id": f"CHG-{i+1:03d}",
                     "order_id": context.get("order_id"),
-                    "amount": context.get("charge_amount"),
-                    "description": context.get("charge_description", "Charge"),
-                    "charged_at": context.get("charge_date"),
-                    "charge_type": charge_type,
+                    "amount": c.get("amount"),
+                    "description": c.get("description", "Charge"),
+                    "charged_at": c.get("date"),
+                    "charge_type": (
+                        "subscription" if "subscription" in c.get("description", "").lower()
+                        else "add-on" if "add-on" in c.get("description", "").lower()
+                        else "purchase"
+                    ),
                 }
-            ],
+                for i, c in enumerate(context["charges"])
+            ]
+            return {"found": True, "customer_id": customer_id, "charges": charges}
+        # Handle single-charge format: {"charge_amount", "charge_description", "charge_date"}
+        if "charge_amount" in context:
+            charge_type = (
+                "subscription"
+                if "subscription" in context.get("charge_description", "").lower()
+                else "purchase"
+            )
+            return {
+                "found": True,
+                "customer_id": customer_id,
+                "charges": [
+                    {
+                        "id": "CHG-001",
+                        "order_id": context.get("order_id"),
+                        "amount": context.get("charge_amount"),
+                        "description": context.get("charge_description", "Charge"),
+                        "charged_at": context.get("charge_date"),
+                        "charge_type": charge_type,
+                    }
+                ],
+            }
+        return {
+            "found": False,
+            "customer_id": customer_id,
+            "message": "No billing charges found for this customer.",
         }
 
     def _get_order_history(customer_id: str) -> dict[str, Any]:  # noqa: ARG001
