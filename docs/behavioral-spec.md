@@ -95,6 +95,26 @@ The non-negotiable corpus pass threshold follows the same logic: a non-negotiabl
 
 ---
 
+## Determinism: Why Temperature Must Be Zero
+
+Every LLM call in GlassBox — both the agent and the judge — runs at **temperature=0**.
+
+This is not a minor implementation detail. It is the foundation that makes the entire evaluation framework meaningful.
+
+At temperature > 0, the model samples from a probability distribution over possible outputs. Two identical inputs produce two different outputs. Run the same 36-example corpus twice against the same model and you will see ±2–5% variance in scores — not because anything changed, but because of randomness in sampling.
+
+**Creativity has no place in benchmarking.** Temperature is a dial between determinism and creativity. In production conversations, some variance is acceptable — even desirable. In evaluation, it is noise that masks signal. If scores vary by 3 points between runs with nothing changed, you cannot tell whether a 3-point improvement after a prompt change is real or just sampling luck.
+
+At temperature=0, the model is fully deterministic (given the same input, same model version, and same hardware):
+
+- Same model + same corpus = **identical scores, every run**
+- A score change means something actually changed: the model, the spec, the prompt, or the corpus
+- Drift signals are real, not statistical artifacts
+
+The judge also runs at temperature=0 for the same reason: the scoring of a response should not vary between evaluations. A judge that assigns 0.85 to a response on Monday and 0.72 on Tuesday — for no reason other than sampling — is not a judge, it is a noise source.
+
+---
+
 ## How Verdicts Accumulate into Conformance Rates
 
 Each call to `judge.score()` produces a `JudgeVerdict` with:

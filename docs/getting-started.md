@@ -216,7 +216,21 @@ Your first run establishes your starting conformance scores. From here, any chan
 
 ---
 
-## 6. Environment variables reference
+## 6. Why temperature is set to zero
+
+Every LLM call in GlassBox — agent and judge — runs at `temperature=0`. This is deliberate and non-negotiable for a benchmarking system.
+
+At temperature > 0, the model samples randomly. Run the same corpus twice with no changes and scores will vary by ±2–5% — not because anything changed, but because of randomness. That variance makes drift signals meaningless: you cannot tell whether a score moved because the model changed or because the random seed was different.
+
+At temperature=0, the model is deterministic. Same model + same corpus + same spec = identical scores every time. Score changes mean something real changed. This is the only property that makes the evaluation framework trustworthy.
+
+> **Creativity has no place in benchmarking.** Temperature is a dial between determinism and creativity. In production conversations some variance is fine. In evaluation, it is noise that masks signal.
+
+If you adapt GlassBox to a new domain and want live production responses to feel more varied, you can set a higher temperature specifically for the `try-it` path — but keep it at 0 for the test suite and judge.
+
+---
+
+## 7. Environment variables reference
 
 | Variable | Required | Description |
 |---|---|---|
@@ -228,7 +242,7 @@ Your first run establishes your starting conformance scores. From here, any chan
 
 ---
 
-## 7. Resetting the database
+## 8. Resetting the database
 
 ```bash
 # Stop the backend (Ctrl+C)
@@ -240,7 +254,7 @@ This wipes all run history, snapshots, and verdicts. The 5 customer personas and
 
 ---
 
-## 8. Common issues
+## 9. Common issues
 
 **"No module named backend"** — run commands from the project root, not from a subdirectory.
 

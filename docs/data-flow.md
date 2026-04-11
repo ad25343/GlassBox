@@ -96,6 +96,16 @@ graph TD
 
 ---
 
+## Determinism: Temperature=0 Across All LLM Calls
+
+Every LLM call in GlassBox — the agent, the final response, and the judge — runs at `temperature=0`. This makes the entire evaluation pipeline **fully deterministic**: the same model, corpus, and spec produce identical scores on every run.
+
+This is the property that makes drift signals meaningful. At temperature > 0, scores vary by ±2–5% between runs with nothing changed. That noise makes it impossible to distinguish a real regression from sampling variance. At temperature=0, any score change is a real signal — something in the model, spec, prompt, or corpus actually changed.
+
+Creativity has no place in benchmarking.
+
+---
+
 ## Static Inputs vs Dynamic Run Data
 
 **`spec.json`** is the behavioral contract and the sole configuration file for domain-specific content. It is read from disk on first use and cached in memory. It defines:
