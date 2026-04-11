@@ -34,7 +34,7 @@ Every verdict is logged synchronously. The full conversation thread — tool cal
 
 The **Behavioral Spec** is the anchor — it defines what good looks like in machine-readable terms. It feeds into the runtime (enforced at every call) and into the Test Suite (the benchmark every deployment is measured against).
 
-**Drift Detection** runs the same 36-example corpus on a schedule and compares today's conformance scores against a versioned baseline. **Model Comparison** runs the same suite against both candidate models and reports per-property deltas. **Production Monitor** samples live outputs continuously and accumulates a running conformance rate by ticket category.
+**Drift Detection** runs the 36-example corpus (triggered from the Model Evaluation page) and tracks per-property scores over time against spec-defined targets. There is no stored "baseline snapshot" — the targets in `spec.json` are the baseline, and they are editable per-property in the UI. **Model Comparison** runs the same corpus against both candidate models concurrently and reports per-property deltas and cost estimates. **Production Monitor** samples live outputs continuously and accumulates a running conformance rate by ticket category, with each alert row showing the customer message, model response, and per-property scores.
 
 ---
 

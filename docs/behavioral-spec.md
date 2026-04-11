@@ -83,6 +83,18 @@ The judge system prompt includes explicit rules for multi-turn scenarios where t
 
 ---
 
+## Baseline: Spec-Defined Targets, Not Historical Snapshots
+
+The "baseline" in GlassBox is a **static, spec-defined threshold** — not a historical execution. A property is passing if its current corpus score meets or exceeds its `target` in `spec.json`. There is no stored baseline snapshot to compare against.
+
+Think of it like a grade threshold: ≥90% is an A. The target is the grade. If the model scores 88%, it's below target — regardless of whether it scored 92% last week.
+
+Targets are editable per-property on the **Baseline & Drift** page, so different properties can have different passing bars (e.g., `issue_acknowledged` targets 95%, `concise_response` targets 85%).
+
+The non-negotiable corpus pass threshold follows the same logic: a non-negotiable is considered passing at the suite level if ≥90% of the 36 examples pass. Individual violations are still surfaced in the per-example drill-down.
+
+---
+
 ## How Verdicts Accumulate into Conformance Rates
 
 Each call to `judge.score()` produces a `JudgeVerdict` with:
@@ -157,7 +169,11 @@ No Python changes are required for steps 1–2.
 
 ### Change thresholds or targets
 
-Edit `target` or `alert_threshold` values in `spec.json` directly. No code changes needed — thresholds are read at runtime.
+There are two ways to update thresholds:
+
+**Via the UI (recommended):** On the **Baseline & Drift** page, click the edit icon on the "Passing Thresholds" card. Each property's target and alert threshold are editable inline. Clicking Save calls `PATCH /api/v1/spec/thresholds`, which writes the updated values directly to `spec.json`. Changes take effect immediately for all future runs and judge evaluations.
+
+**Directly in `spec.json`:** Edit `target` or `alert_threshold` values under `behavioral_properties`. No code changes needed — thresholds are read at runtime.
 
 ### What spec.json now contains
 

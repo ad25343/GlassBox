@@ -149,18 +149,18 @@ graph TD
     subgraph Test Suite Run
         trigger["run_test_suite(model, run_type)\n— on-demand via POST /api/v1/runs/snapshot\n— or triggered by /compare"]
         corpus["Load corpus.json\n(36 labeled examples)"]
-        loop["For each example:\nruntime.handle_ticket()\n→ judge.score()"]
+        loop["asyncio.gather(*[run_example(ex) for ex in corpus])\nAll 36 examples run concurrently\n→ judge.score() per example"]
         aggregate["Aggregate per-property\naverage scores"]
         store_examples["Insert per-example results\nto snapshot_examples\n(one row per corpus example)"]
-        snapshot["INSERT baseline_snapshot\n(run_type: baseline|test|compare)"]
+        snapshot["INSERT baseline_snapshot\n(run_type: test|compare)"]
 
         trigger --> corpus --> loop --> aggregate --> snapshot
         loop --> store_examples
     end
 
     subgraph History & Analysis
-        get_history["get_history()\nSELECT baseline_snapshots\nWHERE run_type = 'baseline'\nORDER BY created_at ASC"]
-        compute_deltas["compute_deltas(snapshots)\nCompare latest vs first snapshot\nfor each property"]
+        get_history["get_history()\nSELECT baseline_snapshots\nWHERE run_type = 'test'\nORDER BY created_at ASC"]
+        compute_deltas["compute_deltas(snapshots)\nCompare score vs spec target\nfor each property"]
         detect_incidents["detect_incidents(snapshots)\nFlag any property score\nbelow alert_threshold"]
     end
 
@@ -290,11 +290,12 @@ graph LR
 |---|---|---|
 | Home | `/` | None (static splash page) |
 | Try It | `/try-it` | `POST /api/v1/traces/` |
-| Test Suite | `/test-suite` | `GET /api/v1/runs/snapshots?run_type=test`, `POST /api/v1/runs/snapshot` |
-| Baseline & Drift | `/drift` | `GET /api/v1/runs/snapshots?run_type=baseline`, `GET /api/v1/runs/snapshots/{id}/diff`, `GET /api/v1/runs/incidents` |
-| Model Comparison | `/compare` | `POST /api/v1/compare/` |
+| Model Evaluation | `/test-suite` | `GET /api/v1/runs/snapshots?run_type=test`, `POST /api/v1/runs/snapshot` |
+| Baseline & Drift | `/drift` | `GET /api/v1/runs/snapshots?run_type=test`, `GET /api/v1/spec`, `PATCH /api/v1/spec/thresholds`, `GET /api/v1/runs/incidents` |
+| Model Comparison | `/compare` | `GET /api/v1/runs/snapshots?run_type=compare`, `POST /api/v1/compare/` |
 | Production Monitor | `/monitor` | `GET /api/v1/monitor/status`, `GET /api/v1/monitor/verdicts`, `GET /api/v1/monitor/alerts` |
-| Chat Log Analytics | `/chatlogs` | `GET /api/v1/chatlogs/analytics`, `GET /api/v1/chatlogs/?session_id=&ticket_type=` |
 | Traces (internal) | n/a | `GET /api/v1/traces/`, `GET /api/v1/traces/{run_id}` |
 
 **Per-example detail:** `GET /api/v1/runs/snapshots/{id}/examples` returns the 36 per-example results for any snapshot. `GET /api/v1/runs/snapshots/{id}/diff` returns changed examples between a snapshot and its predecessor — used by the Drift page when a snapshot point is selected.
+
+**Baseline & Drift** no longer has its own "Run Now" button. All test runs are triggered from the Model Evaluation page (`POST /api/v1/runs/snapshot`) and stored with `run_type=test`. The Drift page reads those same snapshots and computes deltas against spec-defined targets (not a historical baseline snapshot). Thresholds are editable in the UI via `PATCH /api/v1/spec/thresholds`, which writes directly to `spec.json`.

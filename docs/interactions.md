@@ -260,11 +260,12 @@ sequenceDiagram
 
     DE->>DE: load corpus.json<br/>(36 labeled ground-truth examples,<br/>4 ticket types: order_status, refund_request,<br/>billing_dispute, escalation)
 
-    loop for each of 36 corpus examples
-        DE->>RT: handle_ticket(<br/>  customer_message,<br/>  ticket_type,<br/>  context,<br/>  model<br/>)
-        Note over RT, Judge: Full pipeline runs for every example:<br/>prompt construction → Sonnet → Judge → retry if needed<br/>(same flow as Try It page, see Section 3)
+    Note over DE: asyncio.gather — all 36 examples fire concurrently
+    par 36 corpus examples run in parallel
+        DE->>RT: handle_ticket(customer_message, ticket_type, context, model)
+        Note over RT, Judge: Full pipeline per example:<br/>prompt construction → Sonnet → Judge → retry if needed<br/>(same flow as Try It page, see Section 3)
         RT-->>DE: RunResult (response + verdict)
-        DE->>DB: runs / conformance_results /<br/>production_verdicts written per example<br/>(same 3-table write as Try It)
+        DE->>DB: runs / conformance_results /<br/>production_verdicts written per example
     end
 
     DE->>DE: aggregate results across all 36 runs:
@@ -308,12 +309,12 @@ graph TD
         S5 --> S6 --> S7 --> S8 --> S9 --> S10 --> S11
     end
 
-    subgraph ONDEMAND[On-Demand — Run Now Button]
-        D1[User clicks Run Now on Drift page]
-        D2[POST /api/v1/runs/snapshot]
+    subgraph ONDEMAND[On-Demand — Model Evaluation Page]
+        D1[User clicks Run Test Suite on Model Evaluation page]
+        D2[POST /api/v1/runs/snapshot with run_type=test]
         D3[DriftEngine.run_test_suite model]
-        D4[Full 36-example corpus run<br/>see Section 4]
-        D5[INSERT new snapshot → baseline_snapshots]
+        D4[All 36 examples run concurrently via asyncio.gather<br/>see Section 4]
+        D5[INSERT new snapshot → baseline_snapshots with run_type=test]
         D6[Frontend invalidates query cache]
         D7[re-fetch: snapshots + incidents]
 
@@ -322,9 +323,9 @@ graph TD
 
     subgraph ANALYSIS[Drift Analysis — Reading Snapshots]
         A1[DriftEngine.get_history]
-        A2[SELECT all snapshots<br/>ORDER BY created_at ASC]
+        A2[SELECT snapshots WHERE run_type=test<br/>ORDER BY created_at ASC]
         A3[DriftEngine.compute_deltas snapshots]
-        A4[compare latest vs first snapshot<br/>per-property delta = latest - first]
+        A4[delta = current score − spec target per property<br/>target is read from spec.json, editable via PATCH /api/v1/spec/thresholds]
         A5[DriftEngine.detect_incidents snapshots]
         A6[for each snapshot × property<br/>if score below alert_threshold → Incident]
         A7[Incidents array returned<br/>not stored — computed on read]
@@ -438,16 +439,16 @@ graph TD
         A2 --> A5
 
         A6[/api/v1/monitor/alerts]
-        A7[SELECT FROM production_verdicts<br/>WHERE alert_triggered = true]
+        A7[SELECT pv.* + r.ticket_type + r.customer_message<br/>+ r.model + r.response + r.latency_ms<br/>FROM production_verdicts pv<br/>LEFT JOIN runs r ON r.id = pv.run_id<br/>WHERE alert_triggered = true]
 
         A8[/api/v1/monitor/verdicts]
-        A9[SELECT last 50 FROM production_verdicts<br/>raw rows]
+        A9[SELECT last 50 FROM production_verdicts<br/>LEFT JOIN runs — enriched rows]
     end
 
     subgraph RENDER[Frontend Rendering]
         R1[metric cards:<br/>overall_conformance_rate,<br/>alert_count, total_runs]
         R2[category breakdown:<br/>per-property score bars]
-        R3[alert log:<br/>run_id + which properties triggered]
+        R3[alert log:<br/>ticket_type + model + customer message preview<br/>+ worst property + run_id<br/>expanded: full customer message + model response<br/>+ per-property scores + latency]
         R4[verdict table:<br/>last 50 raw verdicts]
     end
 

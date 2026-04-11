@@ -85,15 +85,15 @@ curl -X DELETE http://localhost:8888/api/v1/runs/snapshot/{id}
 
 Once synthetic data is removed (or after a fresh DB), populate GlassBox with real snapshots by running the corpus against your live model.
 
-### 1. Run a baseline snapshot
+### 1. Run your first test suite
 
-On the **Baseline & Drift** page, click **Run Baseline**. This runs all 36 corpus examples against the production model (`claude-sonnet-4-5` by default), scores each one with the judge, and stores the result as a `baseline` snapshot.
+On the **Model Evaluation** page, select a model and click **Run Test Suite**. This runs all 36 corpus examples concurrently against the selected model, scores each one with the judge, and stores the result as a `test` snapshot.
 
-The first snapshot becomes your baseline. Subsequent runs are compared against it to compute drift.
+The spec-defined targets in `spec.json` are the baseline — e.g. `resolution_matching` targets 90%. Each subsequent run is compared against these targets (not against the first run). You can edit targets per-property on the **Baseline & Drift** page.
 
-### 2. Run test suite snapshots
+### 2. View drift
 
-On the **Test Suite** page, click **Run Test Suite**. These are stored as `test` snapshots and are tracked separately from baseline snapshots — useful for exploratory runs against different models or prompt versions without affecting your drift history.
+The **Baseline & Drift** page reads all `test` snapshots for the selected model and shows per-property score trends over time, with delta cards showing `current score − spec target`. No separate "Run Baseline" step is needed.
 
 ### 3. Run model comparisons
 
@@ -103,10 +103,11 @@ On the **Model Comparison** page, click **Compare Models**. Results are stored a
 
 | When | Action | Page |
 |---|---|---|
-| Initial setup | Run one baseline snapshot | Baseline & Drift |
-| After any prompt change | Run a new baseline snapshot, review drift | Baseline & Drift |
+| Initial setup | Run test suite, review scores vs spec targets | Model Evaluation |
+| After any prompt or spec change | Run a new test suite, review Drift page for delta | Model Evaluation → Baseline & Drift |
 | Evaluating a new model | Run model comparison | Model Comparison |
-| Ongoing regression checks | Run test suite snapshots periodically | Test Suite |
+| Adjusting pass thresholds | Edit targets on Passing Thresholds card | Baseline & Drift |
+| Ongoing regression checks | Run test suite periodically | Model Evaluation |
 
 ---
 

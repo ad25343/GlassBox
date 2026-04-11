@@ -44,11 +44,11 @@ graph TD
     end
 
     subgraph Drift Tracking
-        run_suite["run_test_suite(model)\nIterates all 36 corpus examples\nthrough runtime + judge"]
-        snapshot["INSERT INTO baseline_snapshots\n(overall_conformance,\nproperty_scores_json,\nnon_negotiable_results_json,\nrun_type)"]
+        run_suite["run_test_suite(model)\nasyncio.gather — all 36 corpus examples\nrun concurrently through runtime + judge"]
+        snapshot["INSERT INTO baseline_snapshots\n(overall_conformance,\nproperty_scores_json,\nnon_negotiable_results_json,\nrun_type='test')"]
         store_examples["INSERT INTO snapshot_examples\none row per corpus example\n(score, property_scores,\nnon_negotiables_passed)"]
-        history["get_history()\nAll snapshots ASC by created_at"]
-        deltas["compute_deltas()\nlatest score − baseline score\nper property"]
+        history["get_history()\nAll run_type='test' snapshots ASC by created_at"]
+        deltas["compute_deltas()\ncurrent score − spec target\nper property"]
         incidents["detect_incidents()\nAny snapshot where\nscore < alert_threshold"]
     end
 
@@ -142,10 +142,16 @@ A `baseline_snapshot` is a point-in-time summary produced by running the entire 
 
 Each snapshot also stores per-example results in `snapshot_examples` — one row per corpus example with individual scores and a pass/fail flag. This enables example-level diff computation: when two consecutive baseline snapshots exist, `compute_example_diff()` identifies which specific examples newly failed, newly recovered, degraded, or improved between runs.
 
-The first snapshot in the database (oldest by `created_at`) is treated as the **baseline**. All subsequent snapshots are compared against it:
+The **baseline** in GlassBox is a static, spec-defined target — not a historical snapshot. Each behavioral property has a `target` in `spec.json` (e.g., `resolution_matching` targets 0.90). The Baseline & Drift page computes deltas as `current_score − spec_target`:
 
-- `compute_deltas()` computes `current_score − baseline_score` for each property. A delta of `< -0.005` is flagged as `"down"`, `> 0.005` as `"up"`, and within that range as `"stable"`.
+- A positive delta means the model is exceeding the target.
+- A negative delta means the model is below target — regardless of past performance.
+
+This approach treats the spec as the grade threshold. There is no "first run" baseline to drift away from — the target is the anchor.
+
 - `detect_incidents()` scans every snapshot in history and flags any property that fell below its `alert_threshold` — not just the latest snapshot.
+
+Targets and alert thresholds are editable per-property via `PATCH /api/v1/spec/thresholds` (UI: the edit button on the Passing Thresholds card on the Drift page). Changes write to `spec.json` and take effect immediately.
 
 On first startup with an empty database, `seed_synthetic_history()` inserts 14 pre-scripted snapshots dated back 14 days — but only when `SEED_SYNTHETIC_HISTORY=true` is set in `.env`. Day 8 in the synthetic data deliberately shows a `resolution_matching` drop to `0.74` (below the `0.80` threshold), providing a realistic incident for the UI to display out of the box.
 ---
@@ -156,8 +162,9 @@ All snapshot data shares the `baseline_snapshots` table but is segregated by a `
 
 | run_type | Written by | Read by | Purpose |
 |---|---|---|---|
-| `baseline` | Baseline & Drift page — "Run Baseline" | Drift page | Tracks production model conformance over time |
-| `test` | Test Suite page — "Run Test Suite" | Test Suite page | Exploratory runs for regression checks or prompt experiments |
-| `compare` | Model Comparison page — "Compare Models" | Comparison page | Side-by-side snapshots for two models, not part of drift history |
+| `test` | Model Evaluation page — "Run Test Suite" | Test Suite page + Baseline & Drift page | All regression runs; Drift page reads these and computes delta vs spec target |
+| `compare` | Model Comparison page — "Run Comparison" | Comparison page | Side-by-side snapshots for two models, not part of drift history |
+
+The `baseline` run_type is no longer used. Both the Model Evaluation and Baseline & Drift pages read from `run_type=test` snapshots. The Drift page has no "Run Now" button — runs are triggered exclusively from the Model Evaluation page.
 
 This separation means a test suite run does not pollute the drift history, and a model comparison does not appear in the test suite results.
