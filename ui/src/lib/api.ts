@@ -189,6 +189,11 @@ export interface VerdictResponse {
   overall_score: number
   property_scores: Record<string, number>
   alert_triggered: boolean
+  ticket_type?: string
+  customer_message?: string
+  model?: string
+  response?: string
+  latency_ms?: number
 }
 
 // Submit ticket request

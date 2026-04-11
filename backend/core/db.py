@@ -753,7 +753,17 @@ def insert_production_verdict(
 def get_recent_verdicts(limit: int = 50) -> list[dict[str, Any]]:
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT * FROM production_verdicts ORDER BY created_at DESC LIMIT ?", (limit,)
+            """
+            SELECT
+                pv.id, pv.created_at, pv.run_id, pv.overall_score,
+                pv.property_scores_json, pv.alert_triggered,
+                r.ticket_type, r.customer_message, r.model, r.response, r.latency_ms
+            FROM production_verdicts pv
+            LEFT JOIN runs r ON r.id = pv.run_id
+            ORDER BY pv.created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
         ).fetchall()
     results = []
     for row in rows:

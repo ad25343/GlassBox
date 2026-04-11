@@ -252,3 +252,9 @@ class VerdictResponse(BaseModel):
     overall_score: float
     property_scores: dict[str, float]
     alert_triggered: bool
+    # Enriched from joined runs table
+    ticket_type: str | None = None
+    customer_message: str | None = None
+    model: str | None = None
+    response: str | None = None
+    latency_ms: int | None = None

@@ -68,14 +68,32 @@ function PropertyBreakdown({ propertyScores }: { propertyScores: Record<string, 
   )
 }
 
+const TICKET_TYPE_LABELS: Record<string, string> = {
+  order_status: 'Order Status',
+  refund_request: 'Refund',
+  billing_dispute: 'Billing',
+  escalation: 'Escalation',
+}
+
+function modelShortName(model?: string): string {
+  if (!model) return '—'
+  if (model.includes('sonnet')) return 'Sonnet'
+  if (model.includes('haiku')) return 'Haiku'
+  if (model.includes('opus')) return 'Opus'
+  return model
+}
+
 function AlertEntry({ alert }: { alert: VerdictResponse }) {
   const [expanded, setExpanded] = useState(false)
+  const ticketLabel = alert.ticket_type ? (TICKET_TYPE_LABELS[alert.ticket_type] ?? alert.ticket_type) : null
+  const worstProp = Object.entries(alert.property_scores).sort((a, b) => a[1] - b[1])[0]
   return (
     <div
-      className="rounded-lg border cursor-pointer transition-colors hover:bg-red-50/5"
+      className="rounded-lg border cursor-pointer transition-colors"
       style={{ borderColor: '#F43F5E', backgroundColor: expanded ? '#F43F5E18' : '#F43F5E11' }}
       onClick={() => setExpanded(v => !v)}
     >
+      {/* Header row */}
       <div className="flex items-start gap-3 p-3">
         <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: '#F43F5E' }} />
         <div className="flex-1 min-w-0">
@@ -83,12 +101,12 @@ function AlertEntry({ alert }: { alert: VerdictResponse }) {
             <span className="font-mono text-xs text-muted-foreground">
               {new Date(alert.created_at).toLocaleString()}
             </span>
-            <Badge className="text-xs" style={{ backgroundColor: '#F43F5E', color: '#fff' }}>
-              Run #{alert.run_id}
-            </Badge>
-            <Badge className="text-xs" style={{ backgroundColor: '#F43F5E', color: '#fff' }}>
-              ALERT
-            </Badge>
+            {ticketLabel && (
+              <Badge variant="outline" className="text-xs">{ticketLabel}</Badge>
+            )}
+            {alert.model && (
+              <Badge variant="outline" className="text-xs">{modelShortName(alert.model)}</Badge>
+            )}
             <span className="ml-auto text-sm font-semibold" style={{ color: '#F43F5E' }}>
               {(alert.overall_score * 100).toFixed(1)}%
             </span>
@@ -96,9 +114,50 @@ function AlertEntry({ alert }: { alert: VerdictResponse }) {
               ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
               : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
           </div>
-          {expanded && <PropertyBreakdown propertyScores={alert.property_scores} />}
+          {/* Customer message preview — always visible */}
+          {alert.customer_message && (
+            <p className="text-xs text-muted-foreground mt-1.5 truncate pr-4">
+              "{alert.customer_message}"
+            </p>
+          )}
+          {/* Worst property hint */}
+          {!expanded && worstProp && (
+            <p className="text-xs mt-1" style={{ color: '#F43F5E' }}>
+              Lowest: {PROPERTY_CONFIGS.find(p => p.id === worstProp[0])?.displayName ?? worstProp[0]} — {(worstProp[1] * 100).toFixed(0)}%
+            </p>
+          )}
         </div>
       </div>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div className="border-t px-4 py-3 space-y-3" style={{ borderColor: '#F43F5E44' }}>
+          {/* Customer message full */}
+          {alert.customer_message && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Customer Message</p>
+              <p className="text-sm">{alert.customer_message}</p>
+            </div>
+          )}
+          {/* Model response */}
+          {alert.response && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Model Response</p>
+              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{alert.response}</p>
+            </div>
+          )}
+          {/* Scores + meta */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Behavioral Scores</p>
+            <PropertyBreakdown propertyScores={alert.property_scores} />
+          </div>
+          {alert.latency_ms && (
+            <p className="text-[11px] text-muted-foreground">
+              Latency: {(alert.latency_ms / 1000).toFixed(1)}s · Run #{alert.run_id}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
