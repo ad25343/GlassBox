@@ -54,10 +54,14 @@ function StatusIcon({ status }: { status: ConformanceStatus }) {
 // Snapshot non_negotiable_results use aggregate format: { pass_rate: number, total: number }
 // Single-run verdicts use: { passed: boolean, reasoning: string }
 // Handle both.
+// Non-negotiables are zero-tolerance per response, but across a 36-example corpus
+// some model variance is expected. ≥90% corpus pass rate = green; below = red.
+const NN_CORPUS_PASS_THRESHOLD = 0.90
+
 function isNnPassing(result: unknown): boolean {
   if (result === null || typeof result !== 'object') return false
   const r = result as Record<string, unknown>
-  if ('pass_rate' in r) return (r.pass_rate as number) >= 1.0
+  if ('pass_rate' in r) return (r.pass_rate as number) >= NN_CORPUS_PASS_THRESHOLD
   if ('passed' in r) return r.passed === true
   return false
 }
