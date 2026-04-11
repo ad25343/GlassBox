@@ -315,6 +315,7 @@ function NarrativePanel({ summary, sections, result }: { summary: string; sectio
 
 export default function ComparePage() {
   const [showInternals, setShowInternals] = useState(false)
+  const [showHistory, setShowHistory] = useState(true)
   const [selectedPairIdx, setSelectedPairIdx] = useState<number | null>(null)
   const queryClient = useQueryClient()
 
