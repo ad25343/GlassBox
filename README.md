@@ -21,6 +21,7 @@ Built as a companion to the [Locked In Without Knowing It](https://aravinddoma.s
 - **Model comparison** — Sonnet vs Haiku on identical behavioral criteria, with cost-per-conforming-output
 - **Production monitoring** — live conformance monitoring with a running verdict log and alert feed
 - **Production monitoring** — live conformance monitoring with alert log showing the full ticket context (customer message, model response, per-property scores) for every flagged interaction
+- **Chat log analytics** — tool call frequency, session patterns, and turn log — the operator's view of what the agent is doing across every conversation
 
 ---
 
@@ -82,6 +83,7 @@ The database is created and seeded automatically on first run — no migration s
 | **Baseline & Drift** | `/drift` | Behavioral history over time. Delta cards show current score vs spec-defined targets. Editable thresholds per property. Pre-seeded with 14 days of synthetic drift patterns. |
 | **Model Comparison** | `/compare` | Run Sonnet and Haiku against the same spec and corpus. Compare on behavioral criteria, not benchmarks. Full run history persists across sessions. |
 | **Production Monitor** | `/monitor` | Live conformance monitoring. Alert log shows full ticket context — customer message, model response, per-property scores — for every flagged interaction. |
+| **Chat Log Analytics** | `/chatlogs` | Tool call frequency, session patterns, turn log — the operator's view of what the agent is doing across every conversation. |
 
 ---
 
@@ -173,7 +175,7 @@ Tests live in `tests/`, mirroring the `backend/` structure. All LLM calls are mo
 ```
 GlassBox/
 ├── backend/
-│   ├── api/routes/         # traces, runs, compare, monitor, spec
+│   ├── api/routes/         # traces, runs, compare, monitor, chatlogs, spec
 │   ├── core/               # config, db (init + seed), logging
 │   ├── services/           # agent, tools, judge, runtime, drift, log_writer
 │   └── main.py

@@ -294,6 +294,7 @@ graph LR
 | Baseline & Drift | `/drift` | `GET /api/v1/runs/snapshots?run_type=test`, `GET /api/v1/spec`, `PATCH /api/v1/spec/thresholds`, `GET /api/v1/runs/incidents` |
 | Model Comparison | `/compare` | `GET /api/v1/runs/snapshots?run_type=compare`, `POST /api/v1/compare/` |
 | Production Monitor | `/monitor` | `GET /api/v1/monitor/status`, `GET /api/v1/monitor/verdicts`, `GET /api/v1/monitor/alerts` |
+| Chat Log Analytics | `/chatlogs` | `GET /api/v1/chatlogs/analytics`, `GET /api/v1/chatlogs/?session_id=&ticket_type=` |
 | Traces (internal) | n/a | `GET /api/v1/traces/`, `GET /api/v1/traces/{run_id}` |
 
 **Per-example detail:** `GET /api/v1/runs/snapshots/{id}/examples` returns the 36 per-example results for any snapshot. `GET /api/v1/runs/snapshots/{id}/diff` returns changed examples between a snapshot and its predecessor — used by the Drift page when a snapshot point is selected.

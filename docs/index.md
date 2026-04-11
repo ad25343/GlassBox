@@ -1,6 +1,6 @@
 # GlassBox Documentation
 
-GlassBox is a reference implementation of a GenAI customer support application with full behavioral visibility — a multi-turn agent with deterministic tools, behavioral spec enforcement, conformance scoring, drift detection, and model comparison.
+GlassBox is a reference implementation of a GenAI customer support application with full behavioral visibility — a multi-turn agent with deterministic tools, behavioral spec enforcement, conformance scoring, drift detection, model comparison, and chat log analytics.
 
 ---
 
