@@ -84,8 +84,9 @@ export default function TestSuitePage() {
   const queryClient = useQueryClient()
 
   const { data: snapshots, isLoading: snapshotsLoading } = useQuery({
-    queryKey: ['snapshots'],
+    queryKey: ['snapshots', 'test'],
     queryFn: () => getSnapshots('test'),
+    staleTime: 0,
   })
 
   // When model changes or snapshots update, reset to latest for that model
@@ -106,7 +107,7 @@ export default function TestSuitePage() {
     mutationFn: () => triggerSnapshot(selectedModel, 'test'),
     onSuccess: () => {
       setSelectedSnapshotId(null)
-      queryClient.invalidateQueries({ queryKey: ['snapshots'] })
+      queryClient.invalidateQueries({ queryKey: ['snapshots', 'test'] })
     },
   })
 
