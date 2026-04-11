@@ -181,7 +181,7 @@ class DriftEngine:
                     ticket_type=example["ticket_type"],
                     context=example.get("context", {}),
                     model=model,
-                    use_tools=True,  # test suite runs end-to-end with real tools, same as production
+                    use_tools=False,  # corpus context is pre-loaded; corpus test data not in prod DB
                 )
                 total_input_tokens += result.input_tokens
                 total_output_tokens += result.output_tokens
