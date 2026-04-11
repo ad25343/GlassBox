@@ -1,6 +1,7 @@
 """Drift detection engine — synthetic history, test suite runs, delta computation."""
 from __future__ import annotations
 
+import asyncio
 import json
 import random
 from datetime import datetime, timedelta
@@ -175,7 +176,7 @@ class DriftEngine:
         total_output_tokens = 0
         pending_examples: list[dict[str, Any]] = []
 
-        for example in corpus:
+        async def _run_example(example: dict[str, Any]) -> dict[str, Any] | None:
             try:
                 corpus_executor = make_corpus_tool_executor(example.get("context", {}))
                 result = await runtime.handle_ticket(
@@ -186,38 +187,46 @@ class DriftEngine:
                     use_tools=True,
                     tool_executor=corpus_executor,
                 )
-                total_input_tokens += result.input_tokens
-                total_output_tokens += result.output_tokens
-                for prop_id, score_obj in result.verdict.behavioral_scores.items():
-                    if prop_id in all_behavioral:
-                        all_behavioral[prop_id].append(score_obj.score)
-                for prop_id, nn_result in result.verdict.non_negotiable_results.items():
-                    if prop_id in all_non_neg:
-                        all_non_neg[prop_id].append(nn_result.passed)
-                cat = example.get("ticket_type")
-                if cat in all_behavioral_by_category:
-                    for prop_id, score_obj in result.verdict.behavioral_scores.items():
-                        if prop_id in all_behavioral_by_category[cat]:
-                            all_behavioral_by_category[cat][prop_id].append(score_obj.score)
-                # Collect per-example result for transparency log
-                pending_examples.append({
-                    "corpus_example_id": example.get("id", ""),
-                    "ticket_type": example.get("ticket_type", ""),
-                    "customer_message": example.get("customer_message", ""),
-                    "overall_score": result.verdict.overall_conformance,
-                    "property_scores": {
-                        pid: s.score for pid, s in result.verdict.behavioral_scores.items()
-                    },
-                    "non_negotiables_passed": all(
-                        r.passed for r in result.verdict.non_negotiable_results.values()
-                    ),
-                })
-            except Exception as exc:  # noqa: BLE001 — catch-all for corpus iteration
+                return {"example": example, "result": result}
+            except Exception as exc:  # noqa: BLE001
                 logger.error(
                     "error processing corpus example",
                     example_id=example.get("id"),
                     error=str(exc),
                 )
+                return None
+
+        raw_results = await asyncio.gather(*[_run_example(ex) for ex in corpus])
+
+        for item in raw_results:
+            if item is None:
+                continue
+            example, result = item["example"], item["result"]
+            total_input_tokens += result.input_tokens
+            total_output_tokens += result.output_tokens
+            for prop_id, score_obj in result.verdict.behavioral_scores.items():
+                if prop_id in all_behavioral:
+                    all_behavioral[prop_id].append(score_obj.score)
+            for prop_id, nn_result in result.verdict.non_negotiable_results.items():
+                if prop_id in all_non_neg:
+                    all_non_neg[prop_id].append(nn_result.passed)
+            cat = example.get("ticket_type")
+            if cat in all_behavioral_by_category:
+                for prop_id, score_obj in result.verdict.behavioral_scores.items():
+                    if prop_id in all_behavioral_by_category[cat]:
+                        all_behavioral_by_category[cat][prop_id].append(score_obj.score)
+            pending_examples.append({
+                "corpus_example_id": example.get("id", ""),
+                "ticket_type": example.get("ticket_type", ""),
+                "customer_message": example.get("customer_message", ""),
+                "overall_score": result.verdict.overall_conformance,
+                "property_scores": {
+                    pid: s.score for pid, s in result.verdict.behavioral_scores.items()
+                },
+                "non_negotiables_passed": all(
+                    r.passed for r in result.verdict.non_negotiable_results.values()
+                ),
+            })
 
         property_scores: dict[str, float] = {}
         for prop_id, scores in all_behavioral.items():
