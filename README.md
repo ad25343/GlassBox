@@ -19,7 +19,6 @@ Built as a companion to the [Locked In Without Knowing It](https://aravinddoma.s
 - **Conformance scoring** — every response is scored against the spec by an independent judge model, including whether the right tools were called in the right order
 - **Drift detection** — behavioral history over 14 days, with per-property trend lines and threshold alerts
 - **Model comparison** — Sonnet vs Haiku on identical behavioral criteria, with cost-per-conforming-output
-- **Production monitoring** — live conformance monitoring with a running verdict log and alert feed
 - **Production monitoring** — live conformance monitoring with alert log showing the full ticket context (customer message, model response, per-property scores) for every flagged interaction
 - **Chat log analytics** — tool call frequency, session patterns, and turn log — the operator's view of what the agent is doing across every conversation
 

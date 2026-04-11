@@ -105,13 +105,24 @@ class CustomerSupportRuntime:
         # Resolution path from spec (per ticket type)
         resolution_path = self._get_resolution_path(spec, ticket_type)
 
+        # Explicit escalation flag — injected when context signals a repeat contact
+        # so the model doesn't have to parse the JSON and infer the rule itself.
+        escalation_flag = ""
+        if context.get("previous_contacts", 0) >= 1:
+            escalation_flag = (
+                "\n⚠️  ESCALATION ALERT: This customer has contacted support before "
+                f"(previous_contacts = {context['previous_contacts']}). "
+                "If they express ANY frustration or urgency, escalate to a human agent immediately "
+                "— do NOT attempt to resolve the issue yourself.\n"
+            )
+
         # Context block
         if use_tools and not context:
             context_note = "\n## Pre-loaded Context\nNone — use your tools to look up customer information.\n"
         elif context:
-            context_note = f"\n## Pre-loaded Context\n{json.dumps(context, indent=2)}\n"
+            context_note = f"{escalation_flag}\n## Pre-loaded Context\n{json.dumps(context, indent=2)}\n"
         else:
-            context_note = ""
+            context_note = escalation_flag
 
         # Agent persona from spec
         agent = spec.get("agent", {})

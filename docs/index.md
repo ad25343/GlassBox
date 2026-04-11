@@ -8,6 +8,7 @@ GlassBox is a reference implementation of a GenAI customer support application w
 
 | Document | Description |
 |---|---|
+| [getting-started.md](getting-started.md) | Step-by-step setup, first 10 minutes walkthrough, and how to adapt GlassBox to your own domain |
 | [architecture.md](architecture.md) | Full system architecture: C4-style overview, request flow sequence diagram, agent tool loop, behavioral verification loop, drift detection architecture, database schema, model comparison flow, and frontend-to-API mapping |
 | [data-flow.md](data-flow.md) | How a ticket moves from user input through the agent tool loop, verification, and storage; how static inputs (spec, corpus) relate to dynamic run data; how verdicts accumulate into conformance rates; how snapshots version behavior over time |
 | [behavioral-spec.md](behavioral-spec.md) | What a spec is and why it matters, the two property types (non-negotiables vs behavioral), how the judge prompt is constructed including the tool call trace, retry logic, conformance rate calculation, and how to extend the spec |
