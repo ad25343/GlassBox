@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Play, Bookmark, CheckCircle2, AlertTriangle, Loader2, Terminal, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react'
+import { Play, Bookmark, CheckCircle2, AlertTriangle, Loader2, ChevronRight, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -79,7 +79,6 @@ function deriveNonNegotiableSummary(snapshot: SnapshotResponse): string {
 
 export default function TestSuitePage() {
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-5')
-  const [showInternals, setShowInternals] = useState(false)
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<number | null>(null)
   const queryClient = useQueryClient()
 
@@ -131,74 +130,76 @@ export default function TestSuitePage() {
 
   const [expandedProp, setExpandedProp] = useState<string | null>(null)
   const [expandedNn, setExpandedNn] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'results' | 'internals'>('results')
 
   return (
     <div className="flex flex-col h-full">
       {/* Page header */}
-      <div className="p-6 border-b">
-        <h1 className="text-xl font-semibold">Test Suite</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Run the ground truth corpus through the model. Get a per-property conformance report.
-        </p>
+      <div className="px-6 pt-6 pb-0 border-b">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+          <div>
+            <h1 className="text-xl font-semibold">Test Suite</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Run the ground truth corpus through the model. Get a per-property conformance report.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 hover:border-foreground/30 hover:bg-muted/30 transition-colors cursor-pointer"
+            >
+              <option value="claude-sonnet-4-5">claude-sonnet-4-5</option>
+              <option value="claude-haiku-4-5">claude-haiku-4-5</option>
+            </select>
+            <Button
+              className="text-white"
+              style={{ backgroundColor: '#0D9488' }}
+              onClick={() => runMutation.mutate()}
+              disabled={isRunning}
+            >
+              {isRunning ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  Running 36 tests...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-1.5" />
+                  Run Test Suite
+                </>
+              )}
+            </Button>
+            {isRunning && (
+              <p className="text-xs text-muted-foreground italic">
+                This may take a few minutes...
+              </p>
+            )}
+          </div>
+        </div>
+        {/* Tabs */}
+        <div className="flex gap-1">
+          {(['results', 'internals'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                'px-4 py-2 text-sm font-medium border-b-2 transition-colors capitalize',
+                activeTab === tab
+                  ? 'border-[#0D9488] text-[#0D9488]'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Top bar */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 hover:border-foreground/30 hover:bg-muted/30 transition-colors cursor-pointer"
-          >
-            <option value="claude-sonnet-4-5">claude-sonnet-4-5</option>
-            <option value="claude-haiku-4-5">claude-haiku-4-5</option>
-          </select>
-          <Button
-            className="text-white"
-            style={{ backgroundColor: '#0D9488' }}
-            onClick={() => runMutation.mutate()}
-            disabled={isRunning}
-          >
-            {isRunning ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                Running 36 tests...
-              </>
-            ) : (
-              <>
-                <Play className="h-4 w-4 mr-1.5" />
-                Run Test Suite
-              </>
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowInternals((v) => !v)}
-          >
-            <Terminal className="h-4 w-4 mr-1.5" />
-            {showInternals ? 'Hide Internals' : 'Show Internals'}
-          </Button>
-          <div className="relative group">
-            <Button variant="outline" disabled title="Snapshots are saved automatically">
-              <Bookmark className="h-4 w-4 mr-1.5" />
-              Save as Baseline
-            </Button>
-            <div className="absolute left-0 top-full mt-1 z-10 hidden group-hover:block">
-              <div className="bg-popover text-popover-foreground text-xs rounded-md px-2 py-1 shadow-md whitespace-nowrap">
-                Snapshots are saved automatically
-              </div>
-            </div>
-          </div>
-          {isRunning && (
-            <p className="text-xs text-muted-foreground italic">
-              This may take a minute while 36 corpus examples are evaluated...
-            </p>
-          )}
-        </div>
 
         {/* Run History */}
-        {!snapshotsLoading && modelSnapshots.length > 0 && (
+        {activeTab === 'results' && !snapshotsLoading && modelSnapshots.length > 0 && (
           <Card>
             <CardHeader className="border-b pb-3">
               <CardTitle className="text-sm font-medium flex items-center justify-between">
@@ -265,8 +266,8 @@ export default function TestSuitePage() {
           </Card>
         )}
 
-        {/* Summary cards */}
-        {snapshotsLoading ? (
+        {/* Summary cards — results tab only */}
+        {activeTab === 'results' && (snapshotsLoading ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[0, 1, 2, 3].map((i) => (
               <Card key={i}>
@@ -352,10 +353,10 @@ export default function TestSuitePage() {
               </Card>
             ))}
           </div>
-        )}
+        ))}
 
         {/* Behavioral Properties table */}
-        <Card>
+        {activeTab === 'results' && <Card>
           <CardHeader className="border-b pb-3">
             <CardTitle className="text-sm font-medium">Behavioral Properties</CardTitle>
           </CardHeader>
@@ -476,10 +477,10 @@ export default function TestSuitePage() {
               </table>
             )}
           </CardContent>
-        </Card>
+        </Card>}
 
         {/* Non-Negotiables */}
-        {snapshot && Object.keys(snapshot.non_negotiable_results).length > 0 && (
+        {activeTab === 'results' && snapshot && Object.keys(snapshot.non_negotiable_results).length > 0 && (
           <Card>
             <CardHeader className="border-b pb-3">
               <CardTitle className="text-sm font-medium flex items-center">
@@ -560,8 +561,8 @@ export default function TestSuitePage() {
           </Card>
         )}
 
-        {/* Internals panel */}
-        {showInternals && (
+        {/* Internals tab */}
+        {activeTab === 'internals' && (
           <div className="bg-card rounded-lg border border-border p-4 space-y-6">
             <h2 className="text-sm font-semibold">How the Test Suite Works</h2>
 
