@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Play, TrendingUp, TrendingDown, Minus, Loader2, Terminal, History, ChevronDown, ChevronRight, Trash2, X } from 'lucide-react'
+import { Play, TrendingUp, TrendingDown, Minus, Loader2, Terminal, History, ChevronDown, ChevronRight, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -427,16 +427,9 @@ export default function ComparePage() {
 
         {displayResult && (
           <>
-            {/* Results header with close button */}
+            {/* Results header */}
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Results</p>
-              <button
-                className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                onClick={() => setSelectedPairIdx(null)}
-                title="Clear results"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
             </div>
 
             {/* Empty guard */}
