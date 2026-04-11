@@ -8,6 +8,7 @@ import { InfoTooltip, ScoreTooltip, PROPERTY_DESCRIPTIONS } from '@/components/u
 import { cn } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getSnapshots, triggerSnapshot, getSnapshotExamples, deleteSnapshot, type SnapshotResponse, type SnapshotExampleItem } from '@/lib/api'
+import { useEvalRun } from '@/lib/evalRunContext'
 
 interface PropertyConfig {
   id: string
@@ -104,6 +105,8 @@ export default function TestSuitePage() {
   // After a new run completes, reset selection so useEffect picks the new latest
   const runMutation = useMutation({
     mutationFn: () => triggerSnapshot(selectedModel, 'test'),
+    onMutate: () => startEval(selectedModel),
+    onSettled: () => stopEval(),
     onSuccess: () => {
       setSelectedSnapshotId(null)
       queryClient.invalidateQueries({ queryKey: ['snapshots', 'test'] })
@@ -139,6 +142,7 @@ export default function TestSuitePage() {
   const [expandedProp, setExpandedProp] = useState<string | null>(null)
   const [expandedNn, setExpandedNn] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'results' | 'internals'>('results')
+  const { startEval, stopEval } = useEvalRun()
 
   return (
     <div className="flex flex-col h-full">
@@ -220,6 +224,24 @@ export default function TestSuitePage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {isRunning && (
+                    <tr className="border-b bg-teal-50/10" style={{ borderLeft: '3px solid #0D9488' }}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-sm flex items-center gap-2">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: '#0D9488' }} />
+                          Running now…
+                        </p>
+                        <p className="text-xs text-muted-foreground">36 corpus examples</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-muted-foreground italic">in progress</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-muted-foreground italic">—</span>
+                      </td>
+                      <td className="px-4 py-3" />
+                    </tr>
+                  )}
                   {[...modelSnapshots].reverse().map((s) => {
                     const isSelected = s.id === effectiveSnapshotId
                     const color = scoreColor(s.overall_conformance, 0.9, 0.8)
