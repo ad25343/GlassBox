@@ -136,46 +136,40 @@ export default function TestSuitePage() {
     <div className="flex flex-col h-full">
       {/* Page header */}
       <div className="px-6 pt-6 pb-0 border-b">
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-          <div>
-            <h1 className="text-xl font-semibold">Test Suite</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Run the ground truth corpus through the model. Get a per-property conformance report.
-            </p>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 hover:border-foreground/30 hover:bg-muted/30 transition-colors cursor-pointer"
-            >
-              <option value="claude-sonnet-4-5">claude-sonnet-4-5</option>
-              <option value="claude-haiku-4-5">claude-haiku-4-5</option>
-            </select>
-            <Button
-              className="text-white"
-              style={{ backgroundColor: '#0D9488' }}
-              onClick={() => runMutation.mutate()}
-              disabled={isRunning}
-            >
-              {isRunning ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                  Running 36 tests...
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4 mr-1.5" />
-                  Run Test Suite
-                </>
-              )}
-            </Button>
-            {isRunning && (
-              <p className="text-xs text-muted-foreground italic">
-                This may take a few minutes...
-              </p>
+        <h1 className="text-xl font-semibold">Test Suite</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Run the ground truth corpus through the model. Get a per-property conformance report.
+        </p>
+        <div className="flex items-center gap-3 mt-4 flex-wrap">
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 hover:border-foreground/30 hover:bg-muted/30 transition-colors cursor-pointer"
+          >
+            <option value="claude-sonnet-4-5">claude-sonnet-4-5</option>
+            <option value="claude-haiku-4-5">claude-haiku-4-5</option>
+          </select>
+          <Button
+            className="text-white"
+            style={{ backgroundColor: '#0D9488' }}
+            onClick={() => runMutation.mutate()}
+            disabled={isRunning}
+          >
+            {isRunning ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                Running 36 tests...
+              </>
+            ) : (
+              <>
+                <Play className="h-4 w-4 mr-1.5" />
+                Run Test Suite
+              </>
             )}
-          </div>
+          </Button>
+          {isRunning && (
+            <p className="text-xs text-muted-foreground italic">This may take a few minutes...</p>
+          )}
         </div>
         {/* Tabs */}
         <div className="flex gap-1">
