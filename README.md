@@ -20,7 +20,7 @@ Built as a companion to the [Locked In Without Knowing It](https://aravinddoma.s
 - **Drift detection** — behavioral history over 14 days, with per-property trend lines and threshold alerts
 - **Model comparison** — Sonnet vs Haiku on identical behavioral criteria, with cost-per-conforming-output
 - **Production monitoring** — live conformance monitoring with a running verdict log and alert feed
-- **Chat log analytics** — session-level visibility into tool call sequences, conformance by ticket type, and agent behavior patterns
+- **Production monitoring** — live conformance monitoring with alert log showing the full ticket context (customer message, model response, per-property scores) for every flagged interaction
 
 ---
 
@@ -78,11 +78,10 @@ The database is created and seeded automatically on first run — no migration s
 |---|---|---|
 | **Home** | `/` | Overview of the Glass Box concept |
 | **Live Runtime** | `/try-it` | Submit a ticket as one of the seeded personas. Watch the agent call tools, then see the judge's verdict with per-property scores. |
-| **Test Suite** | `/test-suite` | Run the full 36-example corpus through the model. Get a per-property conformance report. Save as a baseline. |
-| **Baseline & Drift** | `/drift` | 14-day behavioral history. Pre-seeded with synthetic drift patterns so the timeline tells a story immediately. |
-| **Model Comparison** | `/compare` | Run Sonnet and Haiku against the same spec and corpus. Compare on behavioral properties, not benchmark numbers. |
-| **Production Monitor** | `/monitor` | Simulated live monitoring. Running conformance rate by ticket category, alert log, verdict feed. |
-| **Chat Log Analytics** | `/chatlogs` | Tool call frequency, sequence patterns, session-level conformance, and turn log — the operator's view of what the agent is doing on every conversation. |
+| **Model Evaluation** | `/test-suite` | Run the full 36-example corpus concurrently through the model. Per-property conformance report, per-example drill-down, run history. |
+| **Baseline & Drift** | `/drift` | Behavioral history over time. Delta cards show current score vs spec-defined targets. Editable thresholds per property. Pre-seeded with 14 days of synthetic drift patterns. |
+| **Model Comparison** | `/compare` | Run Sonnet and Haiku against the same spec and corpus. Compare on behavioral criteria, not benchmarks. Full run history persists across sessions. |
+| **Production Monitor** | `/monitor` | Live conformance monitoring. Alert log shows full ticket context — customer message, model response, per-property scores — for every flagged interaction. |
 
 ---
 
@@ -155,7 +154,7 @@ The write is fire-and-forget — it doesn't block the response.
 
 ### Drift detection (`backend/services/drift.py`)
 
-Runs the full 36-example corpus against the live model on demand, stores a snapshot with model version and prompt version, and computes per-property deltas against the baseline. The demo is pre-seeded with 14 days of synthetic history so the drift page has a story to tell immediately.
+Runs the full 36-example corpus against the live model on demand — all 36 examples fire concurrently via `asyncio.gather`, completing in roughly the time of the slowest single call (~30s for Sonnet). Stores a snapshot with model version and prompt version. The Baseline & Drift page reads these snapshots and computes per-property deltas against spec-defined targets (not a historical snapshot). The demo is pre-seeded with 14 days of synthetic history so the drift page has a story to tell immediately.
 
 ---
 
@@ -174,7 +173,7 @@ Tests live in `tests/`, mirroring the `backend/` structure. All LLM calls are mo
 ```
 GlassBox/
 ├── backend/
-│   ├── api/routes/         # traces, runs, compare, monitor, chatlogs
+│   ├── api/routes/         # traces, runs, compare, monitor, spec
 │   ├── core/               # config, db (init + seed), logging
 │   ├── services/           # agent, tools, judge, runtime, drift, log_writer
 │   └── main.py
