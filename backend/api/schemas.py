@@ -157,6 +157,9 @@ class SnapshotExampleItem(BaseModel):
     overall_score: float
     property_scores: dict[str, float]
     non_negotiables_passed: bool
+    property_reasoning: dict[str, str] = Field(default_factory=dict)
+    non_negotiable_reasoning: dict[str, str] = Field(default_factory=dict)
+    retried: bool = False
 
 
 class ExampleDiffEntry(BaseModel):
@@ -252,6 +255,7 @@ class VerdictResponse(BaseModel):
     overall_score: float
     property_scores: dict[str, float]
     alert_triggered: bool
+    retried: bool = False
     # Enriched from joined runs table
     ticket_type: str | None = None
     customer_message: str | None = None

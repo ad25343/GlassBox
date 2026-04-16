@@ -31,7 +31,7 @@ graph TD
     end
 
     subgraph Storage
-        insert_run["INSERT INTO runs\n(model, ticket_type, message, context,\nresponse, prompt_version,\nlatency_ms, total_tokens)"]
+        insert_run["INSERT INTO runs\n(model, ticket_type, message, context,\nresponse, prompt_version,\nlatency_ms, total_tokens,\ninput_tokens, output_tokens, retried)"]
         insert_conformance["INSERT INTO conformance_results\none row per spec property (7 total)\n(property_name, property_type,\nscore, passed, verdict_json)"]
         insert_verdict["INSERT INTO production_verdicts\n(run_id, overall_score,\nproperty_scores_json, alert_triggered)"]
         insert_chatlog["INSERT INTO chat_logs\n(session_id, run_id, verdict_summary_json)\nverdicts_summary includes full reasoning:\nnon_negotiable_results + behavioral_scores\n(score + reasoning per property)"]
@@ -178,3 +178,34 @@ All snapshot data shares the `baseline_snapshots` table but is segregated by a `
 The `baseline` run_type is no longer used. Both the Model Evaluation and Baseline & Drift pages read from `run_type=test` snapshots. The Drift page has no "Run Now" button — runs are triggered exclusively from the Model Evaluation page.
 
 This separation means a test suite run does not pollute the drift history, and a model comparison does not appear in the test suite results.
+
+---
+
+## Alerts Flow
+
+After a verdict is written with `alert_triggered = 1`, `send_alert()` in `backend/services/alerts.py` is called.
+
+```mermaid
+graph TD
+    verdict["production_verdicts row\nalert_triggered = 1"]
+    send_alert["send_alert(verdict)"]
+    check_slack{"SLACK_WEBHOOK_URL\nset?"}
+    check_email{"ALERT_EMAIL\nset?"}
+    slack["POST alert payload\nto Slack webhook"]
+    email["Log alert to ALERT_EMAIL\n(stub — wire SMTP to deliver)"]
+    silent["No-op — silent skip"]
+
+    verdict --> send_alert
+    send_alert --> check_slack
+    send_alert --> check_email
+    check_slack -->|Yes| slack
+    check_slack -->|No| silent
+    check_email -->|Yes| email
+    check_email -->|No| silent
+```
+
+`alert_triggered` is set to `1` when either condition is true:
+- Any non-negotiable returned `passed = false` from the judge.
+- Any behavioral property score fell below its `alert_threshold` from `spec.json`.
+
+Both channels are independently config-driven: setting one does not require the other. If both env vars are blank (default dev state), `send_alert()` runs and exits without side effects.

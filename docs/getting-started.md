@@ -36,7 +36,16 @@ Open `.env` and set:
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Everything else in `.env.example` is optional. Leave it as-is for the demo.
+The following variables are also available — all optional. Leave any blank to disable that feature (open dev mode):
+
+| Variable | What it enables |
+|---|---|
+| `SLACK_WEBHOOK_URL` | Slack alerts — set to an incoming webhook URL to receive alerts on non-negotiable failures or score drops below threshold |
+| `ALERT_EMAIL` | Email alert logging — set to an address; activate delivery by wiring in an SMTP client in `alerts.py` |
+| `GLASSBOX_USERNAME` | HTTP Basic Auth username — set together with `GLASSBOX_PASSWORD` to require auth on all routes |
+| `GLASSBOX_PASSWORD` | HTTP Basic Auth password — set together with `GLASSBOX_USERNAME` to require auth on all routes |
+
+All four are optional. Leave blank for open dev mode.
 
 ---
 
@@ -89,6 +98,22 @@ All 36 corpus examples run concurrently — this takes about 1–2 minutes. When
 - Per-property breakdown vs targets
 - Non-negotiable pass rates
 - Per-example drill-down: which specific examples failed and on which properties
+
+In the drill-down, each property score is followed by **judge reasoning** — the judge's explanation for that score, shown as italic grey text. This tells you not just that a property failed, but why.
+
+The **Corpus Coverage** panel (collapsible, top of the page) shows total/conforming/non-conforming example counts, a ticket-type breakdown, and which non-negotiables are exercised by the corpus. Backed by `GET /api/v1/runs/corpus-coverage`.
+
+Where a run triggered a retry (non-negotiable violated on the first attempt), an amber **Retried** badge appears on that example row in the drill-down, and on the corresponding verdict in the Monitor feed.
+
+### Step 3a — Review cost and latency
+
+Go to **Cost & Latency** (`/cost`) to see aggregate token usage and estimated spend. The page shows:
+
+- Summary cards: total runs, avg latency, P95 latency, estimated cost
+- Per-model breakdown table
+- 14-day daily bar chart of token usage and cost
+
+This page reads from the `runs` table — it reflects all runs including test suite and comparison runs, not just live tickets.
 
 ### Step 4 — Check drift
 
@@ -239,6 +264,10 @@ If you adapt GlassBox to a new domain and want live production responses to feel
 | `JUDGE_MODEL` | No | Model for the judge (default: `claude-haiku-4-5`) |
 | `SEED_SYNTHETIC_HISTORY` | No | Set `true` to seed 14 days of synthetic drift history on startup (default: `true`) |
 | `DATABASE_URL` | No | SQLite path (default: `glassbox.db` in project root) |
+| `SLACK_WEBHOOK_URL` | No | Slack incoming webhook URL — set to enable Slack alerts on failures |
+| `ALERT_EMAIL` | No | Email address for alert logging — stub; wire in SMTP to activate delivery |
+| `GLASSBOX_USERNAME` | No | Basic auth username — set together with `GLASSBOX_PASSWORD` to require auth |
+| `GLASSBOX_PASSWORD` | No | Basic auth password — set together with `GLASSBOX_USERNAME` to require auth |
 
 ---
 

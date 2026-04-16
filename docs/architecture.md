@@ -195,6 +195,9 @@ erDiagram
         TEXT prompt_version
         INTEGER latency_ms
         INTEGER total_tokens
+        INTEGER input_tokens
+        INTEGER output_tokens
+        INTEGER retried
     }
 
     conformance_results {
@@ -228,6 +231,9 @@ erDiagram
         REAL overall_score
         TEXT property_scores_json
         INTEGER non_negotiables_passed
+        TEXT property_reasoning_json
+        TEXT non_negotiable_reasoning_json
+        INTEGER retried
     }
 
     production_verdicts {
@@ -290,13 +296,55 @@ graph LR
 |---|---|---|
 | Home | `/` | None (static splash page) |
 | Try It | `/try-it` | `POST /api/v1/traces/` |
-| Model Evaluation | `/test-suite` | `GET /api/v1/runs/snapshots?run_type=test`, `POST /api/v1/runs/snapshot` |
+| Model Evaluation | `/test-suite` | `GET /api/v1/runs/snapshots?run_type=test`, `POST /api/v1/runs/snapshot`, `GET /api/v1/runs/corpus-coverage` |
 | Baseline & Drift | `/drift` | `GET /api/v1/runs/snapshots?run_type=test`, `GET /api/v1/spec`, `PATCH /api/v1/spec/thresholds`, `GET /api/v1/runs/incidents` |
 | Model Comparison | `/compare` | `GET /api/v1/runs/snapshots?run_type=compare`, `POST /api/v1/compare/` |
 | Production Monitor | `/monitor` | `GET /api/v1/monitor/status`, `GET /api/v1/monitor/verdicts`, `GET /api/v1/monitor/alerts` |
+| Cost & Latency | `/cost` | `GET /api/v1/cost/summary` |
 | Chat Log Analytics | `/chatlogs` | `GET /api/v1/chatlogs/analytics`, `GET /api/v1/chatlogs/?session_id=&ticket_type=` |
 | Traces (internal) | n/a | `GET /api/v1/traces/`, `GET /api/v1/traces/{run_id}` |
 
 **Per-example detail:** `GET /api/v1/runs/snapshots/{id}/examples` returns the 36 per-example results for any snapshot. `GET /api/v1/runs/snapshots/{id}/diff` returns changed examples between a snapshot and its predecessor — used by the Drift page when a snapshot point is selected.
 
 **Baseline & Drift** no longer has its own "Run Now" button. All test runs are triggered from the Model Evaluation page (`POST /api/v1/runs/snapshot`) and stored with `run_type=test`. The Drift page reads those same snapshots and computes deltas against spec-defined targets (not a historical baseline snapshot). Thresholds are editable in the UI via `PATCH /api/v1/spec/thresholds`, which writes directly to `spec.json`.
+
+**Cost & Latency** (`/cost`) reads `GET /api/v1/cost/summary`, which aggregates token counts and latency from the `runs` table. It returns summary cards (total runs, avg latency, P95 latency, estimated cost), a per-model breakdown table, and 14-day daily totals for the bar chart.
+
+---
+
+## 8. Alerts & Integrations
+
+Alert dispatch is handled by `backend/services/alerts.py`. After a verdict is written, `send_alert()` is called whenever `alert_triggered = 1`.
+
+**Trigger conditions** (either is sufficient):
+- Any non-negotiable returned `passed = false` from the judge.
+- Any behavioral property score fell below its `alert_threshold` (< 0.8 by default).
+
+**Dispatch channels** — both are config-driven and silent when blank:
+- **Slack** — set `SLACK_WEBHOOK_URL` in `.env` to enable. `send_alert()` POSTs the alert payload to the incoming webhook URL.
+- **Email** — set `ALERT_EMAIL` in `.env` to enable. Current implementation is a stub that logs the alert; wire in an SMTP or transactional email client to activate delivery.
+
+If both env vars are blank (the default dev state), `send_alert()` runs but emits nothing — no errors, no side effects.
+
+---
+
+## 9. Auth
+
+GlassBox ships with optional HTTP Basic Auth middleware (`backend/main.py`).
+
+- **Dev mode** (default): if `GLASSBOX_USERNAME` and `GLASSBOX_PASSWORD` are both unset (or blank) in `.env`, the middleware is inactive and all routes are open.
+- **Auth enabled**: set both `GLASSBOX_USERNAME` and `GLASSBOX_PASSWORD` in `.env`. All routes will require valid HTTP Basic credentials. The `/health` endpoint is always exempt regardless of auth state.
+
+The middleware validates credentials on every request; there is no session or token — standard HTTP Basic Auth semantics.
+
+---
+
+## 10. CI/CD
+
+A GitHub Actions workflow lives at `.github/workflows/test-suite.yml`. It runs on every push and pull request targeting `main`.
+
+**What it runs:**
+1. `ruff check . && ruff format --check .` — lint and format check.
+2. `pytest` — full test suite.
+
+**Setup:** add `ANTHROPIC_API_KEY` as a repository secret in GitHub (Settings → Secrets and variables → Actions). The workflow reads it as `${{ secrets.ANTHROPIC_API_KEY }}`. Without this secret, any test that calls the Anthropic SDK will fail.

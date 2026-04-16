@@ -8,6 +8,7 @@ import ComparePage from '@/pages/ComparePage'
 import MonitorPage from '@/pages/MonitorPage'
 import SpecPage from '@/pages/SpecPage'
 import ChatLogsPage from '@/pages/ChatLogsPage'
+import CostPage from '@/pages/CostPage'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="compare"    element={<ComparePage />} />
         <Route path="monitor"    element={<MonitorPage />} />
         <Route path="chatlogs"   element={<ChatLogsPage />} />
+        <Route path="cost"       element={<CostPage />} />
       </Route>
     </Routes>
   )

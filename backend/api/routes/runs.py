@@ -1,6 +1,10 @@
 """Runs routes — baseline snapshots, trigger test suite, incidents."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Any
+
 import anthropic
 from fastapi import APIRouter, HTTPException, Response
 
@@ -141,6 +145,48 @@ async def get_snapshot_diff(snapshot_id: int) -> Envelope[SnapshotDiffResponse]:
         },
     )
     return Envelope(data=diff, meta={"snapshot_id": snapshot_id})
+
+
+@router.get("/corpus-coverage", response_model=Envelope[dict[str, Any]])
+async def get_corpus_coverage() -> Envelope[dict[str, Any]]:
+    """Return corpus statistics — ticket type breakdown, label counts, and non-negotiables covered."""
+    corpus_path = Path("corpus.json")
+    if not corpus_path.exists():
+        raise HTTPException(status_code=404, detail="corpus.json not found")
+
+    with corpus_path.open() as fh:
+        examples: list[dict[str, Any]] = json.load(fh)
+
+    total_examples = len(examples)
+    conforming = sum(1 for ex in examples if ex.get("label") == "conforming")
+    non_conforming = sum(1 for ex in examples if ex.get("label") == "non_conforming")
+
+    ticket_type_counts: dict[str, int] = {}
+    for ex in examples:
+        tt = ex.get("ticket_type", "unknown")
+        ticket_type_counts[tt] = ticket_type_counts.get(tt, 0) + 1
+
+    # Collect non-negotiable IDs mentioned in non-conforming example notes/context
+    nn_tested: set[str] = set()
+    for ex in examples:
+        if ex.get("label") != "non_conforming":
+            continue
+        notes = ex.get("notes", "")
+        # Common non-negotiable IDs from spec.json
+        for nn_id in ("no_premature_refund", "escalation_threshold", "no_unauthorized_account_details"):
+            if nn_id in notes or nn_id in json.dumps(ex.get("context", {})):
+                nn_tested.add(nn_id)
+
+    return Envelope(
+        data={
+            "total_examples": total_examples,
+            "conforming": conforming,
+            "non_conforming": non_conforming,
+            "ticket_types": ticket_type_counts,
+            "non_negotiables_tested": sorted(nn_tested),
+        },
+        meta={},
+    )
 
 
 @router.get("/incidents", response_model=Envelope[list[IncidentResponse]])

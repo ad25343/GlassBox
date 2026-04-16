@@ -52,6 +52,8 @@ MIGRATE_RUNS_ADD_TURN_NUMBER = """
 ALTER TABLE runs ADD COLUMN turn_number INTEGER NOT NULL DEFAULT 1
 """
 
+MIGRATE_RUNS_ADD_TOKEN_SPLIT = "migrate_runs_add_token_split"
+
 MIGRATE_SNAPSHOTS_ADD_CATEGORY_SCORES = """
 ALTER TABLE baseline_snapshots ADD COLUMN category_scores_json TEXT NOT NULL DEFAULT '{}'
 """
@@ -257,6 +259,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "turn_number" not in run_cols:
         logger.info("migrating runs — adding turn_number")
         conn.execute(MIGRATE_RUNS_ADD_TURN_NUMBER)
+    if "input_tokens" not in run_cols:
+        logger.info("migrating runs — adding input_tokens and output_tokens (token split)")
+        conn.execute("ALTER TABLE runs ADD COLUMN input_tokens INTEGER DEFAULT 0")
+        conn.execute("ALTER TABLE runs ADD COLUMN output_tokens INTEGER DEFAULT 0")
+    if "retried" not in run_cols:
+        logger.info("migrating runs — adding retried")
+        conn.execute("ALTER TABLE runs ADD COLUMN retried INTEGER NOT NULL DEFAULT 0")
     snap_cols = {row[1] for row in conn.execute("PRAGMA table_info(baseline_snapshots)").fetchall()}
     if "category_scores_json" not in snap_cols:
         logger.info("migrating baseline_snapshots — adding category_scores_json")
@@ -279,6 +288,17 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "snapshot_examples" not in existing_tables:
         logger.info("migrating — creating snapshot_examples table")
         conn.execute(CREATE_SNAPSHOT_EXAMPLES)
+    # Fetch columns after ensuring snapshot_examples exists
+    snap_ex_cols = {row[1] for row in conn.execute("PRAGMA table_info(snapshot_examples)").fetchall()}
+    if "property_reasoning_json" not in snap_ex_cols:
+        logger.info("migrating snapshot_examples — adding property_reasoning_json")
+        conn.execute("ALTER TABLE snapshot_examples ADD COLUMN property_reasoning_json TEXT NOT NULL DEFAULT '{}'")
+    if "non_negotiable_reasoning_json" not in snap_ex_cols:
+        logger.info("migrating snapshot_examples — adding non_negotiable_reasoning_json")
+        conn.execute("ALTER TABLE snapshot_examples ADD COLUMN non_negotiable_reasoning_json TEXT NOT NULL DEFAULT '{}'")
+    if "retried" not in snap_ex_cols:
+        logger.info("migrating snapshot_examples — adding retried")
+        conn.execute("ALTER TABLE snapshot_examples ADD COLUMN retried INTEGER NOT NULL DEFAULT 0")
     conn.commit()
 
 
@@ -494,6 +514,9 @@ def insert_run(
     prompt_version: str,
     latency_ms: int,
     total_tokens: int,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    retried: bool = False,
     conversation_history: list[dict[str, str]] | None = None,
     session_id: str | None = None,
     turn_number: int = 1,
@@ -505,8 +528,8 @@ def insert_run(
             INSERT INTO runs
                 (created_at, session_id, turn_number, model, ticket_type, customer_message,
                  context, response, prompt_version, latency_ms, total_tokens,
-                 conversation_history_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 input_tokens, output_tokens, retried, conversation_history_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 created_at,
@@ -520,6 +543,9 @@ def insert_run(
                 prompt_version,
                 latency_ms,
                 total_tokens,
+                input_tokens,
+                output_tokens,
+                int(retried),
                 json.dumps(conversation_history or []),
             ),
         )
@@ -604,14 +630,18 @@ def insert_snapshot_example(
     overall_score: float,
     property_scores: dict[str, float],
     non_negotiables_passed: bool,
+    property_reasoning: dict[str, str] | None = None,
+    non_negotiable_reasoning: dict[str, str] | None = None,
+    retried: bool = False,
 ) -> None:
     with get_db() as conn:
         conn.execute(
             """
             INSERT INTO snapshot_examples
                 (snapshot_id, corpus_example_id, ticket_type, customer_message_truncated,
-                 overall_score, property_scores_json, non_negotiables_passed)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 overall_score, property_scores_json, non_negotiables_passed,
+                 property_reasoning_json, non_negotiable_reasoning_json, retried)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot_id,
@@ -621,6 +651,9 @@ def insert_snapshot_example(
                 round(overall_score, 4),
                 json.dumps(property_scores),
                 int(non_negotiables_passed),
+                json.dumps(property_reasoning or {}),
+                json.dumps(non_negotiable_reasoning or {}),
+                int(retried),
             ),
         )
         conn.commit()
@@ -637,6 +670,9 @@ def get_snapshot_examples(snapshot_id: int) -> list[dict[str, Any]]:
         d = dict(row)
         d["property_scores"] = json.loads(d.pop("property_scores_json"))
         d["non_negotiables_passed"] = bool(d["non_negotiables_passed"])
+        d["property_reasoning"] = json.loads(d.pop("property_reasoning_json", "{}"))
+        d["non_negotiable_reasoning"] = json.loads(d.pop("non_negotiable_reasoning_json", "{}"))
+        d["retried"] = bool(d.get("retried", 0))
         results.append(d)
     return results
 
@@ -695,6 +731,9 @@ def unpin_baseline() -> None:
 def _deserialize_run(d: dict[str, Any]) -> dict[str, Any]:
     d["context"] = json.loads(d["context"])
     d["conversation_history"] = json.loads(d.pop("conversation_history_json", "[]"))
+    d.setdefault("input_tokens", 0)
+    d.setdefault("output_tokens", 0)
+    d["retried"] = bool(d.get("retried", 0))
     return d
 
 
@@ -704,6 +743,119 @@ def get_recent_runs(limit: int = 50) -> list[dict[str, Any]]:
             "SELECT * FROM runs ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()
     return [_deserialize_run(dict(row)) for row in rows]
+
+
+def get_cost_summary() -> dict[str, Any]:
+    """Return aggregate cost and latency stats from the runs table."""
+    # Approximate Sonnet token prices per token
+    INPUT_PRICE = 0.000003
+    OUTPUT_PRICE = 0.000015
+
+    with get_db() as conn:
+        # Overall aggregates
+        overall = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS total_runs,
+                AVG(latency_ms) AS avg_latency_ms,
+                SUM(input_tokens) AS total_input_tokens,
+                SUM(output_tokens) AS total_output_tokens,
+                SUM(total_tokens) AS total_tokens,
+                latency_ms
+            FROM runs
+            """
+        ).fetchone()
+
+        # P95 latency — use SQLite's built-in NTILE workaround
+        latency_rows = conn.execute(
+            "SELECT latency_ms FROM runs ORDER BY latency_ms ASC"
+        ).fetchall()
+
+        # Per-model aggregates
+        model_rows = conn.execute(
+            """
+            SELECT
+                model,
+                COUNT(*) AS total_runs,
+                AVG(latency_ms) AS avg_latency_ms,
+                SUM(input_tokens) AS total_input_tokens,
+                SUM(output_tokens) AS total_output_tokens,
+                SUM(total_tokens) AS total_tokens
+            FROM runs
+            GROUP BY model
+            """
+        ).fetchall()
+
+        # Daily aggregates (last 14 days)
+        daily_rows = conn.execute(
+            """
+            SELECT
+                date(created_at) AS day,
+                COUNT(*) AS runs,
+                SUM(input_tokens) AS input_tokens,
+                SUM(output_tokens) AS output_tokens,
+                SUM(total_tokens) AS total_tokens
+            FROM runs
+            WHERE created_at >= date('now', '-14 days')
+            GROUP BY date(created_at)
+            ORDER BY day ASC
+            """
+        ).fetchall()
+
+    total_runs = overall["total_runs"] if overall else 0
+    avg_latency_ms = round(overall["avg_latency_ms"] or 0, 1)
+
+    # Compute p95 latency from sorted list
+    p95_latency_ms: float = 0.0
+    if latency_rows:
+        idx = max(0, int(len(latency_rows) * 0.95) - 1)
+        p95_latency_ms = float(latency_rows[idx]["latency_ms"])
+
+    total_input = overall["total_input_tokens"] or 0
+    total_output = overall["total_output_tokens"] or 0
+    total_tok = overall["total_tokens"] or 0
+    estimated_cost_usd = (total_input * INPUT_PRICE) + (total_output * OUTPUT_PRICE)
+
+    by_model = []
+    for row in model_rows:
+        m_input = row["total_input_tokens"] or 0
+        m_output = row["total_output_tokens"] or 0
+        m_cost = (m_input * INPUT_PRICE) + (m_output * OUTPUT_PRICE)
+        by_model.append({
+            "model": row["model"],
+            "total_runs": row["total_runs"],
+            "avg_latency_ms": round(row["avg_latency_ms"] or 0, 1),
+            "total_input_tokens": m_input,
+            "total_output_tokens": m_output,
+            "total_tokens": row["total_tokens"] or 0,
+            "estimated_cost_usd": round(m_cost, 6),
+        })
+
+    daily = []
+    for row in daily_rows:
+        d_input = row["input_tokens"] or 0
+        d_output = row["output_tokens"] or 0
+        d_cost = (d_input * INPUT_PRICE) + (d_output * OUTPUT_PRICE)
+        daily.append({
+            "day": row["day"],
+            "runs": row["runs"],
+            "input_tokens": d_input,
+            "output_tokens": d_output,
+            "total_tokens": row["total_tokens"] or 0,
+            "estimated_cost_usd": round(d_cost, 6),
+        })
+
+    return {
+        "avg_latency_ms": avg_latency_ms,
+        "p95_latency_ms": round(p95_latency_ms, 1),
+        "total_runs": total_runs,
+        "total_input_tokens": total_input,
+        "total_output_tokens": total_output,
+        "total_tokens": total_tok,
+        "estimated_cost_usd": round(estimated_cost_usd, 6),
+        "by_model": by_model,
+        "daily": daily,
+    }
 
 
 def get_run_by_id(run_id: int) -> dict[str, Any] | None:
@@ -757,7 +909,8 @@ def get_recent_verdicts(limit: int = 50) -> list[dict[str, Any]]:
             SELECT
                 pv.id, pv.created_at, pv.run_id, pv.overall_score,
                 pv.property_scores_json, pv.alert_triggered,
-                r.ticket_type, r.customer_message, r.model, r.response, r.latency_ms
+                r.ticket_type, r.customer_message, r.model, r.response, r.latency_ms,
+                COALESCE(r.retried, 0) AS retried
             FROM production_verdicts pv
             LEFT JOIN runs r ON r.id = pv.run_id
             ORDER BY pv.created_at DESC
@@ -770,5 +923,6 @@ def get_recent_verdicts(limit: int = 50) -> list[dict[str, Any]]:
         d = dict(row)
         d["property_scores"] = json.loads(d.pop("property_scores_json"))
         d["alert_triggered"] = bool(d["alert_triggered"])
+        d["retried"] = bool(d.get("retried", 0))
         results.append(d)
     return results

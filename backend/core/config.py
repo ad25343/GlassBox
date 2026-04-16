@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     JUDGE_MODEL: str = "claude-haiku-4-5"
     CANDIDATE_MODEL: str = "claude-haiku-4-5"
     SEED_SYNTHETIC_HISTORY: bool = False
+    SLACK_WEBHOOK_URL: str = ""
+    ALERT_EMAIL: str = ""
+    GLASSBOX_USERNAME: str = ""
+    GLASSBOX_PASSWORD: str = ""
 
 
 _settings: Settings | None = None

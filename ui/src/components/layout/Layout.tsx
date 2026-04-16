@@ -8,6 +8,7 @@ import {
   Activity,
   ShieldCheck,
   ScrollText,
+  DollarSign,
   Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -23,6 +24,7 @@ const nav = [
   { to: '/compare',    icon: Scale,         label: 'Model Comparison' },
   { to: '/monitor',    icon: Activity,      label: 'Production Monitor' },
   { to: '/chatlogs',   icon: ScrollText,    label: 'Chat Log Analytics' },
+  { to: '/cost',       icon: DollarSign,    label: 'Cost & Latency' },
 ]
 
 export default function Layout() {

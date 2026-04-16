@@ -14,6 +14,7 @@ from backend.api.schemas import (
 from backend.core import db
 from backend.core.config import get_settings
 from backend.core.logging import get_logger
+from backend.services.alerts import send_alert
 from backend.services.judge import JudgeService
 from backend.services.runtime import CustomerSupportRuntime
 
@@ -72,6 +73,29 @@ async def submit_ticket(body: SubmitTicketRequest) -> Envelope[RunResponse]:
         import traceback as tb
         logger.error("unexpected error handling ticket", error=str(exc), traceback=tb.format_exc())
         raise HTTPException(status_code=500, detail="Unexpected error. Check server logs for details.") from exc
+
+    # Fire alert if any threshold was breached — non-blocking, never raises
+    if result.verdict.any_non_negotiable_failed or any(
+        s.score < 0.8 for s in result.verdict.behavioral_scores.values()
+    ):
+        worst_prop = min(
+            result.verdict.behavioral_scores.items(),
+            key=lambda kv: kv[1].score,
+            default=None,
+        )
+        alert_message = (
+            f"Ticket type: {result.ticket_type} | "
+            f"Overall conformance: {result.verdict.overall_conformance:.2%} | "
+            f"Run #{result.run_id}"
+        )
+        if worst_prop:
+            alert_message += f" | Lowest property: {worst_prop[0]} ({worst_prop[1].score:.2%})"
+        alert_severity = "critical" if result.verdict.any_non_negotiable_failed else "warning"
+        await send_alert(
+            title=f"GlassBox conformance alert — {result.ticket_type}",
+            message=alert_message,
+            severity=alert_severity,
+        )
 
     from backend.api.schemas import ToolCall
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Play, CheckCircle2, AlertTriangle, Loader2, ChevronRight, ChevronDown, Trash2 } from 'lucide-react'
+import { Play, CheckCircle2, AlertTriangle, Loader2, ChevronRight, ChevronDown, Trash2, ChevronUp } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { InfoTooltip, ScoreTooltip, PROPERTY_DESCRIPTIONS } from '@/components/ui/score-tooltip'
 import { cn } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getSnapshots, triggerSnapshot, getSnapshotExamples, deleteSnapshot, type SnapshotResponse, type SnapshotExampleItem } from '@/lib/api'
+import { getSnapshots, triggerSnapshot, getSnapshotExamples, deleteSnapshot, getCorpusCoverage, type SnapshotResponse, type SnapshotExampleItem } from '@/lib/api'
 import { useEvalRun } from '@/lib/evalRunContext'
 
 interface PropertyConfig {
@@ -80,6 +80,109 @@ function deriveNonNegotiableSummary(snapshot: SnapshotResponse): string {
   const total = Object.keys(results).length
   const passing = Object.values(results).filter(isNnPassing).length
   return `${passing}/${total} Passing`
+}
+
+// ── Corpus Coverage Panel ────────────────────────────────────────────────────
+
+function CorpusCoveragePanel() {
+  const [expanded, setExpanded] = useState(false)
+  const { data, isLoading } = useQuery({
+    queryKey: ['corpus-coverage'],
+    queryFn: getCorpusCoverage,
+    staleTime: 60_000,
+  })
+
+  return (
+    <Card>
+      <CardHeader className="border-b pb-3">
+        <CardTitle className="text-sm font-medium flex items-center justify-between">
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          >
+            {expanded
+              ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              : <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            }
+            Corpus Coverage
+          </button>
+          <span className="text-xs font-normal text-muted-foreground">click to expand</span>
+        </CardTitle>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="p-4">
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-4 w-36" />
+            </div>
+          ) : data ? (
+            <div className="space-y-4">
+              {/* Stat grid */}
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-2xl font-semibold">{data.total_examples}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Total examples</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold" style={{ color: '#0D9488' }}>
+                    {data.conforming}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Conforming</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold" style={{ color: '#F59E0B' }}>
+                    {data.non_conforming}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Non-conforming</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                {/* Ticket type breakdown */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    Ticket Types
+                  </p>
+                  <div className="space-y-1.5">
+                    {Object.entries(data.ticket_types).map(([type, count]) => (
+                      <div key={type} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground capitalize">
+                          {type.replace(/_/g, ' ')}
+                        </span>
+                        <span className="font-medium tabular-nums">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Non-negotiables covered */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    Non-Negotiables Covered
+                  </p>
+                  {data.non_negotiables_tested.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">None detected in corpus notes</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {data.non_negotiables_tested.map((id) => (
+                        <div key={id} className="flex items-center gap-2 text-xs">
+                          <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" style={{ color: '#0D9488' }} />
+                          <span className="font-mono text-muted-foreground">{id}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No corpus data available.</p>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  )
 }
 
 export default function TestSuitePage() {
@@ -496,13 +599,29 @@ const { data: examples } = useQuery({
                                     {propExamples.map((ex) => {
                                       const exScore = ex.property_scores[prop.id] ?? 0
                                       const exColor = scoreColor(exScore, prop.target, prop.alertThreshold)
+                                      const reasoning = ex.property_reasoning?.[prop.id]
                                       return (
-                                        <div key={ex.id} className="flex items-start gap-3 py-1.5 border-b border-border/40 last:border-0">
-                                          <span className="font-mono text-xs font-semibold w-12 flex-shrink-0 mt-0.5" style={{ color: exColor }}>
-                                            {(exScore * 100).toFixed(0)}%
-                                          </span>
-                                          <span className="text-xs bg-muted px-1.5 py-0.5 rounded flex-shrink-0">{ex.ticket_type}</span>
-                                          <span className="text-xs text-muted-foreground leading-relaxed">{ex.customer_message_truncated}</span>
+                                        <div key={ex.id} className="py-1.5 border-b border-border/40 last:border-0">
+                                          <div className="flex items-start gap-3">
+                                            <span className="font-mono text-xs font-semibold w-12 flex-shrink-0 mt-0.5" style={{ color: exColor }}>
+                                              {(exScore * 100).toFixed(0)}%
+                                            </span>
+                                            <span className="text-xs bg-muted px-1.5 py-0.5 rounded flex-shrink-0">{ex.ticket_type}</span>
+                                            {ex.retried && (
+                                              <span
+                                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider text-white flex-shrink-0"
+                                                style={{ backgroundColor: '#F59E0B' }}
+                                              >
+                                                Retried
+                                              </span>
+                                            )}
+                                            <span className="text-xs text-muted-foreground leading-relaxed">{ex.customer_message_truncated}</span>
+                                          </div>
+                                          {reasoning && (
+                                            <p className="text-xs italic mt-1 ml-15 pl-15" style={{ color: '#64748b', paddingLeft: '60px' }}>
+                                              {reasoning}
+                                            </p>
+                                          )}
                                         </div>
                                       )
                                     })}
@@ -602,6 +721,9 @@ const { data: examples } = useQuery({
             </CardContent>
           </Card>
         )}
+
+        {/* Corpus Coverage panel */}
+        {activeTab === 'results' && <CorpusCoveragePanel />}
 
         {/* Internals tab */}
         {activeTab === 'internals' && (

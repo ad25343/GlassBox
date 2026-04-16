@@ -226,6 +226,13 @@ class DriftEngine:
                 "non_negotiables_passed": all(
                     r.passed for r in result.verdict.non_negotiable_results.values()
                 ),
+                "property_reasoning": {
+                    pid: s.reasoning for pid, s in result.verdict.behavioral_scores.items()
+                },
+                "non_negotiable_reasoning": {
+                    pid: r.reasoning for pid, r in result.verdict.non_negotiable_results.items()
+                },
+                "retried": result.retried,
             })
 
         property_scores: dict[str, float] = {}
@@ -271,6 +278,9 @@ class DriftEngine:
                 overall_score=ex["overall_score"],
                 property_scores=ex["property_scores"],
                 non_negotiables_passed=ex["non_negotiables_passed"],
+                property_reasoning=ex.get("property_reasoning"),
+                non_negotiable_reasoning=ex.get("non_negotiable_reasoning"),
+                retried=ex.get("retried", False),
             )
         logger.info("stored per-example results", snapshot_id=snapshot_id, count=len(pending_examples))
 

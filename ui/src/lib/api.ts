@@ -109,6 +109,9 @@ export interface SnapshotExampleItem {
   overall_score: number
   property_scores: Record<string, number>
   non_negotiables_passed: boolean
+  property_reasoning: Record<string, string>
+  non_negotiable_reasoning: Record<string, string>
+  retried: boolean
 }
 
 // One example that changed status between two snapshots
@@ -189,6 +192,7 @@ export interface VerdictResponse {
   overall_score: number
   property_scores: Record<string, number>
   alert_triggered: boolean
+  retried: boolean
   ticket_type?: string
   customer_message?: string
   model?: string
@@ -213,18 +217,6 @@ export async function submitTicket(req: SubmitTicketRequest): Promise<RunRespons
     method: 'POST',
     body: JSON.stringify(req),
   })
-}
-
-// Per-example result for a snapshot run
-export interface SnapshotExampleItem {
-  id: number
-  snapshot_id: number
-  corpus_example_id: string
-  ticket_type: string
-  customer_message_truncated: string
-  overall_score: number
-  property_scores: Record<string, number>
-  non_negotiables_passed: boolean
 }
 
 export async function getSnapshotExamples(snapshotId: number): Promise<SnapshotExampleItem[]> {
@@ -401,4 +393,55 @@ export async function getChatLogs(params?: { limit?: number; ticket_type?: strin
 
 export async function getChatAnalytics(): Promise<ChatAnalytics> {
   return apiFetch<ChatAnalytics>('/api/v1/chatlogs/analytics')
+}
+
+// ── Cost & Latency ─────────────────────────────────────────────────────────
+
+export interface ModelCostStats {
+  model: string
+  total_runs: number
+  avg_latency_ms: number
+  total_input_tokens: number
+  total_output_tokens: number
+  total_tokens: number
+  estimated_cost_usd: number
+}
+
+export interface DailyCostStats {
+  day: string
+  runs: number
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  estimated_cost_usd: number
+}
+
+export interface CostSummary {
+  avg_latency_ms: number
+  p95_latency_ms: number
+  total_runs: number
+  total_input_tokens: number
+  total_output_tokens: number
+  total_tokens: number
+  estimated_cost_usd: number
+  by_model: ModelCostStats[]
+  daily: DailyCostStats[]
+}
+
+export async function getCostSummary(): Promise<CostSummary> {
+  return apiFetch<CostSummary>('/api/v1/cost/summary')
+}
+
+// ── Corpus Coverage ────────────────────────────────────────────────────────
+
+export interface CorpusCoverage {
+  total_examples: number
+  conforming: number
+  non_conforming: number
+  ticket_types: Record<string, number>
+  non_negotiables_tested: string[]
+}
+
+export async function getCorpusCoverage(): Promise<CorpusCoverage> {
+  return apiFetch<CorpusCoverage>('/api/v1/runs/corpus-coverage')
 }

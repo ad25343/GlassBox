@@ -107,6 +107,9 @@ function AlertEntry({ alert }: { alert: VerdictResponse }) {
             {alert.model && (
               <Badge variant="outline" className="text-xs">{modelShortName(alert.model)}</Badge>
             )}
+            {alert.retried && (
+              <Badge className="text-xs" style={{ backgroundColor: '#F59E0B', color: '#fff' }}>Retried</Badge>
+            )}
             <span className="ml-auto text-sm font-semibold" style={{ color: '#F43F5E' }}>
               {(alert.overall_score * 100).toFixed(1)}%
             </span>
@@ -180,6 +183,9 @@ function VerdictEntry({ verdict, index }: { verdict: VerdictResponse; index: num
         </span>
         {verdict.alert_triggered && (
           <Badge className="text-xs" style={{ backgroundColor: '#F43F5E', color: '#fff' }}>ALERT</Badge>
+        )}
+        {verdict.retried && (
+          <Badge className="text-xs" style={{ backgroundColor: '#F59E0B', color: '#fff' }}>Retried</Badge>
         )}
         <span className="ml-auto">
           {expanded
