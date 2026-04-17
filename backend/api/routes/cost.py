@@ -18,9 +18,8 @@ async def get_cost_summary() -> Envelope[dict[str, Any]]:
     """Return aggregate cost and latency stats from all runs.
 
     Includes overall stats, per-model breakdown, and a 14-day daily series.
-    Estimated costs use approximate Sonnet token prices:
-      - Input:  $0.000003 / token
-      - Output: $0.000015 / token
+    Token prices are read from INPUT_TOKEN_PRICE / OUTPUT_TOKEN_PRICE in config
+    (set via .env — defaults to Sonnet pricing).
     """
     summary = db.get_cost_summary()
     return Envelope(data=summary, meta={})

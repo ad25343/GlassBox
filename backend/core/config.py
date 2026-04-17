@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     ALERT_EMAIL: str = ""
     GLASSBOX_USERNAME: str = ""
     GLASSBOX_PASSWORD: str = ""
+    # Token pricing (USD per token) — update as model pricing changes
+    INPUT_TOKEN_PRICE: float = 0.000003   # $3.00 / 1M input tokens (Sonnet)
+    OUTPUT_TOKEN_PRICE: float = 0.000015  # $15.00 / 1M output tokens (Sonnet)
 
 
 _settings: Settings | None = None

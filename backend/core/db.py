@@ -747,9 +747,10 @@ def get_recent_runs(limit: int = 50) -> list[dict[str, Any]]:
 
 def get_cost_summary() -> dict[str, Any]:
     """Return aggregate cost and latency stats from the runs table."""
-    # Approximate Sonnet token prices per token
-    INPUT_PRICE = 0.000003
-    OUTPUT_PRICE = 0.000015
+    from backend.core.config import get_settings
+    settings = get_settings()
+    INPUT_PRICE = settings.INPUT_TOKEN_PRICE
+    OUTPUT_PRICE = settings.OUTPUT_TOKEN_PRICE
 
     with get_db() as conn:
         # Overall aggregates
