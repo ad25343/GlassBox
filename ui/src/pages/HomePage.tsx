@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/lib/ThemeToggle'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, RefreshCw } from 'lucide-react'
+import { resetDemo } from '@/lib/api'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -103,6 +105,61 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function ThinRule() {
   return <hr className="border-0 border-t" style={{ borderColor: '#0D9488', opacity: 0.4 }} />
+}
+
+function DemoBar() {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+
+  async function handleReset() {
+    setStatus('loading')
+    try {
+      await resetDemo()
+      setStatus('done')
+      setTimeout(() => setStatus('idle'), 3000)
+    } catch {
+      setStatus('error')
+      setTimeout(() => setStatus('idle'), 3000)
+    }
+  }
+
+  return (
+    <div className="bg-muted/50 border-b border-border px-6 py-2 md:px-16 lg:px-24">
+      <div className="max-w-5xl mx-auto flex items-center justify-between gap-4 flex-wrap">
+        <p className="text-xs text-muted-foreground">
+          <span className="font-semibold text-foreground">Demo mode.</span>{' '}
+          All data is synthetic. Reset anytime to start fresh.
+        </p>
+        <button
+          onClick={handleReset}
+          disabled={status === 'loading'}
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all border',
+            status === 'done'
+              ? 'border-transparent text-white'
+              : status === 'error'
+                ? 'border-transparent text-white'
+                : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30',
+          )}
+          style={
+            status === 'done'
+              ? { backgroundColor: '#0D9488' }
+              : status === 'error'
+                ? { backgroundColor: '#F43F5E' }
+                : {}
+          }
+        >
+          <RefreshCw className={cn('size-3', status === 'loading' && 'animate-spin')} />
+          {status === 'loading'
+            ? 'Resetting…'
+            : status === 'done'
+              ? 'Reset complete'
+              : status === 'error'
+                ? 'Reset failed'
+                : 'Reset demo data'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 // ─── Sections ────────────────────────────────────────────────────────────────
@@ -460,6 +517,7 @@ export default function HomePage() {
         <ThemeToggle variant="pill" />
       </div>
       <HeroSection />
+      <DemoBar />
       <ThinRule />
       <ProblemSection />
       <CapabilitiesSection />

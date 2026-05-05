@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   ScrollText,
   DollarSign,
+  BookOpen,
   Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -25,6 +26,7 @@ const nav = [
   { to: '/monitor',    icon: Activity,      label: 'Production Monitor' },
   { to: '/chatlogs',   icon: ScrollText,    label: 'Chat Log Analytics' },
   { to: '/cost',       icon: DollarSign,    label: 'Cost & Latency' },
+  { to: '/corpus',     icon: BookOpen,      label: 'Corpus Editor' },
 ]
 
 export default function Layout() {

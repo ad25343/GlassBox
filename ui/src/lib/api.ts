@@ -445,3 +445,55 @@ export interface CorpusCoverage {
 export async function getCorpusCoverage(): Promise<CorpusCoverage> {
   return apiFetch<CorpusCoverage>('/api/v1/runs/corpus-coverage')
 }
+
+// ── Demo Reset ─────────────────────────────────────────────────────────────
+
+export async function resetDemo(): Promise<{ status: string; message: string }> {
+  return apiFetch<{ status: string; message: string }>('/api/v1/demo/reset', { method: 'POST' })
+}
+
+// ── Corpus Editor ──────────────────────────────────────────────────────────
+
+export interface CorpusExample {
+  id: string
+  ticket_type: string
+  customer_message: string
+  context: Record<string, unknown>
+  resolution_path: string
+  label: 'conforming' | 'non_conforming'
+  notes: string
+}
+
+export interface CorpusExampleCreate {
+  ticket_type: string
+  customer_message: string
+  context: Record<string, unknown>
+  resolution_path: string
+  label: 'conforming' | 'non_conforming'
+  notes: string
+}
+
+export async function getCorpusExamples(): Promise<CorpusExample[]> {
+  return apiFetch<CorpusExample[]>('/api/v1/corpus')
+}
+
+export async function createCorpusExample(body: CorpusExampleCreate): Promise<CorpusExample> {
+  return apiFetch<CorpusExample>('/api/v1/corpus', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateCorpusExample(
+  id: string,
+  body: Partial<CorpusExampleCreate>,
+): Promise<CorpusExample> {
+  return apiFetch<CorpusExample>(`/api/v1/corpus/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteCorpusExample(id: string): Promise<void> {
+  await fetch(`${BASE}/api/v1/corpus/${id}`, { method: 'DELETE' })
+}

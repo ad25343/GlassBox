@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from backend.api.routes import chatlogs, compare, cost, monitor, runs, sessions, spec, traces
+from backend.api.routes import chatlogs, compare, corpus, cost, demo, monitor, runs, sessions, spec, traces
 from backend.core import db
 from backend.core.config import get_settings
 from backend.core.logging import configure_logging, get_logger
@@ -98,6 +98,8 @@ app.include_router(monitor.router)
 app.include_router(spec.router)
 app.include_router(chatlogs.router)
 app.include_router(cost.router)
+app.include_router(demo.router)
+app.include_router(corpus.router)
 
 
 @app.get("/health", tags=["health"])

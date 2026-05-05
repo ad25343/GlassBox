@@ -200,6 +200,33 @@ def get_db() -> sqlite3.Connection:
     return conn
 
 
+def reset_demo_data() -> None:
+    """Clear all live run data so the demo can be shown from a clean state.
+
+    Deletes: runs, conformance_results, sessions, production_verdicts,
+    chat_logs, baseline_snapshots (cascades to snapshot_examples).
+    Support data (customers/orders/billing) is re-seeded so tool calls still work.
+    """
+    logger.info("resetting demo data")
+    with get_db() as conn:
+        # Disable FK enforcement temporarily so we can truncate in any order
+        conn.execute("PRAGMA foreign_keys=OFF")
+        for table in (
+            "snapshot_examples",
+            "baseline_snapshots",
+            "conformance_results",
+            "production_verdicts",
+            "chat_logs",
+            "runs",
+            "sessions",
+        ):
+            conn.execute(f"DELETE FROM {table}")  # noqa: S608 — table names are hardcoded
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.commit()
+    _seed_support_data()
+    logger.info("demo data reset complete")
+
+
 def init_db() -> None:
     logger.info("initializing database", db_path=str(DB_PATH))
     with get_db() as conn:
